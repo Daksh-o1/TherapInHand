@@ -9,6 +9,9 @@ ENV_FILE = BASE_DIR / ".env"
 DEFAULT_SQLITE_PATH = BASE_DIR / "data" / "therapinhand.sqlite3"
 BASE_LOG_DIR = BASE_DIR / "logs"
 
+os.makedirs(BASE_DIR / "data", exist_ok=True)
+os.makedirs(BASE_LOG_DIR, exist_ok=True)
+
 _ENV_LOADED = False
 
 
