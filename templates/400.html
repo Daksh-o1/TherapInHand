@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | Request Error{% endblock %}
+
+{% block content %}
+<main class="page page-auth">
+  <section class="auth-layout panel">
+    <div class="auth-copy">
+      <span class="eyebrow">Request problem</span>
+      <h1>That request could not be processed.</h1>
+      <p>Please go back and try again. If the issue keeps happening, refresh the page and resend the request.</p>
+      <a class="btn btn-primary" href="{{ url_for('chat_page') }}">Return to chat</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

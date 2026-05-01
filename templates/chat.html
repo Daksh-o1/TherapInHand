@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | Chat{% endblock %}
+
+{% block content %}
+<main class="page page-chat">
+  <section class="assistant-shell panel">
+    <aside class="assistant-sidebar" id="chatSidebar">
+      <div class="sidebar-top">
+        <button id="sidebarToggle" type="button" class="btn btn-secondary sidebar-toggle" aria-label="Toggle sidebar">Menu</button>
+        <button id="newChatBtn" type="button" class="btn btn-primary new-chat-btn">New Chat</button>
+      </div>
+
+      <div class="sidebar-intro">
+        <span class="eyebrow">Assistant</span>
+        <h2>TherapInHand</h2>
+        <p>Rule-based guidance and the existing AI fallback continue working underneath a cleaner multi-chat workspace.</p>
+      </div>
+
+      <div class="chat-history-list" id="chatHistoryList">
+        <div class="history-group">
+          <h3>Today</h3>
+          <div class="history-items" id="historyItems"></div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="assistant-main">
+      <header class="assistant-header">
+        <div>
+          <span class="eyebrow">Live support</span>
+          <h1 id="chatTitle">New chat</h1>
+          <p class="chat-subtitle">Private, context-aware support with persistent conversations and theme personalization.</p>
+        </div>
+        <div class="assistant-header-side">
+          <a class="btn btn-secondary" href="{{ url_for('profile_page') }}">Customize</a>
+          <span class="status-chip" id="chatStatus">Ready</span>
+        </div>
+      </header>
+
+      <div class="chat-scroll">
+        <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+      </div>
+
+      <form id="chatForm" class="chat-composer">
+        <label class="composer-shell" for="messageInput">
+          <textarea id="messageInput" name="message" placeholder="Message TherapInHand..." rows="1" required></textarea>
+          <span class="composer-hint">Enter to send | Shift + Enter for a new line</span>
+        </label>
+        <button id="sendBtn" type="submit" class="btn btn-primary send-btn">Send</button>
+      </form>
+    </section>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.TherapInHandConfig = {
+    historyUrl: "{{ url_for('session_history') }}",
+    chatUrl: "{{ url_for('chat') }}",
+    chatsUrl: "{{ url_for('api_chats') }}",
+    newChatUrl: "{{ url_for('api_chat_new') }}",
+    chatDetailUrlTemplate: "{{ url_for('api_chat_detail', chat_id='__CHAT_ID__') }}",
+    chatRenameUrlTemplate: "{{ url_for('api_chat_rename', chat_id='__CHAT_ID__') }}",
+    llmStatusUrl: "{{ url_for('api_llm_status') }}",
+    initialSessionId: "{{ chat_session_id }}",
+    user: {{ (user or {}) | tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+{% endblock %}

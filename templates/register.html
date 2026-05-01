@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | Register{% endblock %}
+
+{% block content %}
+<main class="page page-auth">
+  <section class="auth-layout panel">
+    <div class="auth-copy">
+      <span class="eyebrow">Create your space</span>
+      <h1>Save your themes, profile, and multi-chat history.</h1>
+      <p>Register for a persistent TherapInHand account while keeping the same assistant behavior and privacy-focused chat experience.</p>
+      <button type="button" class="btn btn-secondary auth-guest-btn" id="guestContinueBtn" data-guest-url="{{ url_for('continue_as_guest') }}">Continue as Guest</button>
+    </div>
+
+    <form id="registerForm" class="auth-form panel" data-submit-url="{{ url_for('api_register') }}" data-redirect-url="{{ url_for('chat_page') }}">
+      <h2>Register</h2>
+      <label class="field">
+        <span>Username</span>
+        <input type="text" name="username" minlength="2" required />
+      </label>
+      <label class="field">
+        <span>Email</span>
+        <input type="email" name="email" required />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" name="password" minlength="6" required />
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" name="remember_me" />
+        <span>Remember me</span>
+      </label>
+      <div class="auth-feedback" id="registerFeedback"></div>
+      <button type="submit" class="btn btn-primary">Create Account</button>
+      <p class="auth-switch">Already have an account? <a href="{{ url_for('login_page') }}">Login</a></p>
+    </form>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/auth-pages.js') }}"></script>
+{% endblock %}

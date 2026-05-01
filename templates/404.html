@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | Not Found{% endblock %}
+
+{% block content %}
+<main class="page page-auth">
+  <section class="auth-layout panel">
+    <div class="auth-copy">
+      <span class="eyebrow">Page missing</span>
+      <h1>We could not find that page.</h1>
+      <p>The link may be outdated, or the page may have moved. Your existing chats and account data are still safe.</p>
+      <a class="btn btn-primary" href="{{ url_for('index') }}">Go home</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

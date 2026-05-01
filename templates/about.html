@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | About{% endblock %}
+
+{% block content %}
+<main class="page page-about">
+  <section class="content-panel">
+    <div class="section-heading">
+      <span class="eyebrow">About TherapInHand</span>
+      <h1>Designed for supportive, practical responses.</h1>
+      <p>
+        TherapInHand combines keyword-guided response logic, sentiment and intent detection, specialist handling for emotional and physical concerns,
+        and OpenRouter-backed responses for broader prompts.
+      </p>
+    </div>
+
+    <div class="about-grid">
+      <article class="info-card">
+        <h3>Flask backend</h3>
+        <p>Routes render the main pages, handle session-aware messaging, and expose history APIs for the chat interface.</p>
+      </article>
+      <article class="info-card">
+        <h3>Chat storage</h3>
+        <p>SQLite stores message pairs by session so the chat page can restore previous conversation history cleanly.</p>
+      </article>
+      <article class="info-card">
+        <h3>Frontend flow</h3>
+        <p>The chat UI loads history on entry, sends messages through JSON APIs, and shows loading state while the assistant responds.</p>
+      </article>
+      <article class="info-card">
+        <h3>Safety behavior</h3>
+        <p>Emergency and fallback flows remain in place, and OpenRouter integration is preserved for unmatched or broader user requests.</p>
+      </article>
+    </div>
+  </section>
+</main>
+{% endblock %}

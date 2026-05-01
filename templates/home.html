@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | Home{% endblock %}
+
+{% block content %}
+<main class="page page-home">
+  <section class="hero-panel">
+    <div class="hero-copy">
+      <span class="eyebrow">Guided support with rule-based structure and AI fallback</span>
+      <h1>Quieter conversations for stressful days.</h1>
+      <p>
+        TherapInHand gives people a calmer way to talk through anxiety, stress, low mood, and everyday health concerns.
+        The experience stays structured and safety-first while still feeling warm and responsive.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="{{ url_for('chat_page') }}">Open Chat</a>
+        {% if user %}
+        <a class="btn btn-secondary" href="{{ url_for('profile_page') }}">Manage Profile</a>
+        {% else %}
+        <a class="btn btn-secondary" href="{{ url_for('login_page') }}">Login</a>
+        <a class="btn btn-secondary" href="{{ url_for('register_page') }}">Register</a>
+        {% endif %}
+      </div>
+    </div>
+    <aside class="hero-card">
+      <h2>What the app does well</h2>
+      <ul class="feature-list">
+        <li>Structured responses for common emotional and symptom-based prompts</li>
+        <li>OpenRouter support when a keyword path is not a good fit</li>
+        <li>Session-based chat history with SQLite storage</li>
+        <li>Responsive chat UI for desktop and mobile</li>
+      </ul>
+    </aside>
+  </section>
+
+  <section class="info-grid">
+    <article class="info-card">
+      <h3>Rule-first support</h3>
+      <p>Known support patterns stay fast, predictable, and less repetitive with response variation and short-term memory.</p>
+    </article>
+    <article class="info-card">
+      <h3>AI when needed</h3>
+      <p>OpenRouter remains available for broader prompts while the fallback system still protects continuity.</p>
+    </article>
+    <article class="info-card">
+      <h3>Persistent history</h3>
+      <p>Each session stores both user and assistant turns so returning to the chat page feels continuous.</p>
+    </article>
+  </section>
+</main>
+{% endblock %}

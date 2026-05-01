@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | Server Error{% endblock %}
+
+{% block content %}
+<main class="page page-auth">
+  <section class="auth-layout panel">
+    <div class="auth-copy">
+      <span class="eyebrow">Temporary issue</span>
+      <h1>Something went wrong on our side.</h1>
+      <p>Please try again in a moment. If the problem continues, check the deployment logs for the latest request failure.</p>
+      <a class="btn btn-primary" href="{{ url_for('chat_page') }}">Back to chat</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

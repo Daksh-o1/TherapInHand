@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}TherapInHand{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}TherapInHand offers calm, structured wellbeing support with a guided chat experience.{% endblock %}" />
+  <meta name="csrf-token" content="{{ csrf_token }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+  <script>
+    (function () {
+      const defaults = {{ (theme_defaults or {'theme_name':'blue','theme_mode':'system','accent_color':'blue','gradient_theme':'ocean'}) | tojson }};
+      const userTheme = {{ (user or {}) | tojson }};
+      const csrfToken = {{ csrf_token | tojson }};
+      const localPrefs = (() => {
+        try {
+          return JSON.parse(localStorage.getItem("therapinhand-theme-prefs") || "{}");
+        } catch (error) {
+          return {};
+        }
+      })();
+      const prefs = {
+        theme_name: localPrefs.theme_name || userTheme.theme_name || defaults.theme_name,
+        accent_color: localPrefs.accent_color || userTheme.accent_color || defaults.accent_color,
+        gradient_theme: localPrefs.gradient_theme || userTheme.gradient_theme || defaults.gradient_theme,
+        theme_mode: localPrefs.theme_mode || userTheme.theme_mode || defaults.theme_mode
+      };
+      const resolveMode = (mode) => mode === "system"
+        ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        : mode;
+      document.documentElement.dataset.accent = prefs.accent_color;
+      document.documentElement.dataset.gradient = prefs.gradient_theme;
+      document.documentElement.dataset.mode = prefs.theme_mode;
+      document.documentElement.dataset.modeResolved = resolveMode(prefs.theme_mode);
+      window.TherapInHandTheme = { defaults, current: prefs };
+      window.TherapInHandApp = {
+        csrfToken,
+        currentUser: {{ (user or {}) | tojson }}
+      };
+    })();
+  </script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('index') }}">
+        <span class="brand-mark">TH</span>
+        <span class="brand-copy">
+          <strong>TherapInHand</strong>
+          <small>Private wellbeing assistant</small>
+        </span>
+      </a>
+      <nav class="topnav" aria-label="Primary navigation">
+        <a href="{{ url_for('index') }}" class="{% if active_page == 'home' %}active{% endif %}">Home</a>
+        <a href="{{ url_for('about_page') }}" class="{% if active_page == 'about' %}active{% endif %}">About</a>
+        <a href="{{ url_for('chat_page') }}" class="{% if active_page == 'chat' %}active{% endif %}">Chat</a>
+        <a href="{{ url_for('profile_page') }}" class="{% if active_page == 'profile' %}active{% endif %}">Profile</a>
+      </nav>
+      <div class="topbar-side auth-actions">
+        <span class="status-chip">{% if user %}{{ user.name }}{% else %}Guest session{% endif %}</span>
+        {% if user %}
+        <button type="button" class="btn btn-secondary btn-small" id="logoutBtn" data-logout-url="{{ url_for('api_logout') }}">Logout</button>
+        {% else %}
+        <a class="btn btn-secondary btn-small" href="{{ url_for('login_page') }}">Login</a>
+        <a class="btn btn-primary btn-small" href="{{ url_for('register_page') }}">Register</a>
+        {% endif %}
+      </div>
+    </header>
+    {% block content %}{% endblock %}
+  </div>
+  <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

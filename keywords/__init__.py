@@ -1,0 +1,8 @@
+# Keywords package – imports all maps for use in app.py
+from .english import SENTIMENT_MAP_EN, INTENT_MAP_EN, INTENT_PATTERNS_EN, TOPIC_MAP_EN
+from .hindi   import SENTIMENT_MAP_HI, INTENT_MAP_HI, INTENT_PATTERNS_HI, TOPIC_MAP_HI
+
+__all__ = [
+    "SENTIMENT_MAP_EN", "INTENT_MAP_EN", "INTENT_PATTERNS_EN", "TOPIC_MAP_EN",
+    "SENTIMENT_MAP_HI", "INTENT_MAP_HI", "INTENT_PATTERNS_HI", "TOPIC_MAP_HI",
+]

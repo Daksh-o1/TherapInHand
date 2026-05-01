@@ -1,0 +1,167 @@
+{
+  "users": {
+    "2b3bc86ab2da4a6db23661d19c54111e": {
+      "name": "fdeltker",
+      "email": "aqughfghfc@gmail.com",
+      "password_hash": "scrypt:32768:8:1$48ya6u9Mbew6bZDU$a776c20c6cf33ad0082f9122190de7d44966f1715ce3c5c05eb23b68cec72306c91e618c4ee0f8a21ecaaf777fc9d1688c330ef82459dd8582ae3da22dfa0e11",
+      "theme": "night",
+      "created_at": "2026-04-16T15:54:05.059610+00:00"
+    },
+    "c80bd07eb50648b1944828f56bcd6f88": {
+      "name": "aqua01",
+      "email": "aqua73871@gmail.com",
+      "password_hash": "scrypt:32768:8:1$91WIGVHsNYZfdUwO$603d1d68d5055cafc1cb99bbff9650a76294f88ecfa52e3f6ec0f9b27cfe40de4bf2a3530c422acebb823633869c44c5d2d48c96fa4e883633ecd523a86551c9",
+      "theme": "night",
+      "created_at": "2026-04-17T11:39:16.615651+00:00"
+    }
+  },
+  "chat_history": {
+    "2b3bc86ab2da4a6db23661d19c54111e": [
+      {
+        "id": "220dd1c065364937990002e99edbed81",
+        "created_at": "2026-04-16T15:54:57.730191+00:00",
+        "user": "Hey bud i need a session therapy right niow",
+        "bot": "I may not be understanding that clearly yet, but I still want to help.\n\nI can best support you with:\n- mental health feelings like stress, anxiety, sadness, loneliness, or panic\n- physical discomfort like fever, cold, cough, headache, stomach pain, dizziness, or fatigue\n- simple self-care guidance and next-step suggestions\n\nTry telling me what you feel, what symptoms you have, or what kind of help you want.",
+        "meta": {
+          "sentiment": "negative",
+          "intent": "general_query",
+          "topic": "general",
+          "intent_confidence": 0.3623,
+          "sentiment_confidence": 0.3495,
+          "fallback_used": true,
+          "ml_used": true,
+          "llm_enabled": true,
+          "llm_loaded": false
+        }
+      },
+      {
+        "id": "b55d4da7b56441e99c1c2764a0724530",
+        "created_at": "2026-04-16T16:31:18.944566+00:00",
+        "user": "i feel anxious",
+        "bot": "I can hear the tension in that, and anxiety really can make everything feel louder and more urgent than it is.\n\nTry this with me right now:\n- Exhale fully first.\n- Breathe in for 4 seconds and out for 6 seconds, five times.\n- Look around and name 3 things you can see and 2 things you can touch.\n- Do not argue with every thought right now; just let the thoughts pass and come back to your breathing.\n\nIf you want, I can also help you sort whether this is stress, panic, or overthinking.",
+        "meta": {
+          "sentiment": "negative",
+          "intent": "emotional_support",
+          "topic": "anxiety",
+          "intent_confidence": 0.3968,
+          "sentiment_confidence": 0.9853,
+          "fallback_used": false,
+          "ml_used": true,
+          "llm_enabled": false,
+          "llm_loaded": false,
+          "llm_provider": "openrouter"
+        }
+      },
+      {
+        "id": "693ed2add2ea4b55923e114cd0c53ba0",
+        "created_at": "2026-04-16T16:31:28.195569+00:00",
+        "user": "i feel sick",
+        "bot": "I am here with you, and whatever is going on, you do not have to untangle it perfectly for me.\n\nA good next step is to tell me one of these clearly:\n- what you are feeling most right now\n- what happened today\n- what kind of help you want first\n\nI will try to respond in a practical and supportive way.",
+        "meta": {
+          "sentiment": "negative",
+          "intent": "emotional_support",
+          "topic": "general",
+          "intent_confidence": 0.8574,
+          "sentiment_confidence": 0.9815,
+          "fallback_used": false,
+          "ml_used": true,
+          "llm_enabled": false,
+          "llm_loaded": false,
+          "llm_provider": "openrouter"
+        }
+      },
+      {
+        "id": "145026a80ab744d995e05afb72a22218",
+        "created_at": "2026-04-16T16:36:44.756293+00:00",
+        "user": "just feeling anxious",
+        "bot": "I'm really sorry that you're feeling anxious right now. Anxiety is a normal emotion, but when it becomes overwhelming, it can be difficult to manage. Here are some practical steps that might help:\n\n1. Practice deep breathing: Take slow, deep breaths in through your nose and out through your mouth. Count to 4 as you breathe in, and count to 4 as you breathe out. Repeat this several times.\n2. Engage in a calming activity: Try doing something that you find relaxing, like reading a book, taking a warm bath, or listening to calming music.\n3. Stay present: Try to focus on the present moment instead of worrying about the future. You can do this by focusing on your senses - what can you see, hear, touch, taste, or smell right now?\n4. Reach out for support: If you're feeling overwhelmed, it can be helpful to talk to someone about how you're feeling. You might want to consider speaking with a trusted friend or family member, or seeking professional help from a therapist or counselor.\n\nRemember, it's okay",
+        "meta": {
+          "sentiment": "neutral",
+          "intent": "emotional_support",
+          "topic": "anxiety",
+          "intent_confidence": 0.606,
+          "sentiment_confidence": 0.457,
+          "fallback_used": false,
+          "ml_used": true,
+          "llm_enabled": true,
+          "llm_loaded": true,
+          "llm_provider": "openrouter"
+        }
+      },
+      {
+        "id": "c57ef00a3b974eada67b0cc928c208e2",
+        "created_at": "2026-04-16T16:37:47.858239+00:00",
+        "user": "i have high fever",
+        "bot": "I'm really sorry to hear that you're not feeling well and have a high fever. It's important to take care of yourself during this time. Here are some practical steps you can take:\n\n1. Rest: Try to get plenty of rest. This can help your body fight off the infection.\n2. Hydrate: Stay hydrated by drinking plenty of fluids. Avoid alcohol and caffeine as they can dehydrate you.\n3. Comfort: Use a cool compress to help bring down your fever. Dress in light clothing and keep the room at a comfortable temperature.\n4. Monitor symptoms: Keep an eye on your symptoms and note any changes. If your fever gets worse, or you experience other symptoms like difficulty breathing, severe headache, or chest pain, it's important to seek medical attention right away.\n\nRemember, it's always a good idea to consult with a healthcare professional if you're concerned about your symptoms. They can provide you with accurate information and recommend appropriate treatment options. Take care of yourself and don't hesitate to reach out for help if you need it.",
+        "meta": {
+          "sentiment": "negative",
+          "intent": "symptom_report",
+          "topic": "physical_discomfort",
+          "intent_confidence": 0.7804,
+          "sentiment_confidence": 0.9582,
+          "fallback_used": false,
+          "ml_used": true,
+          "llm_enabled": true,
+          "llm_loaded": true,
+          "llm_provider": "openrouter"
+        }
+      }
+    ],
+    "c80bd07eb50648b1944828f56bcd6f88": [
+      {
+        "id": "79945e4b4b664e448750217466f0d16c",
+        "created_at": "2026-04-17T11:39:28.286649+00:00",
+        "user": "hi",
+        "bot": "I may not be understanding that clearly yet, but I still want to help.\n\nI can best support you with:\n- mental health feelings like stress, anxiety, sadness, loneliness, or panic\n- physical discomfort like fever, cold, cough, headache, stomach pain, dizziness, or fatigue\n- simple self-care guidance and next-step suggestions\n\nTry telling me what you feel, what symptoms you have, or what kind of help you want.",
+        "meta": {
+          "sentiment": "negative",
+          "intent": "symptom_report",
+          "topic": "general",
+          "intent_confidence": 0.2667,
+          "sentiment_confidence": 0.3953,
+          "fallback_used": true,
+          "ml_used": true,
+          "llm_enabled": false,
+          "llm_loaded": false,
+          "llm_provider": "openrouter"
+        }
+      },
+      {
+        "id": "d14d884d42f74c66acb7d0e9b59e58b4",
+        "created_at": "2026-04-17T11:44:09.648725+00:00",
+        "user": "hi",
+        "bot": "I may not be understanding that clearly yet, but I still want to help.\n\nI can best support you with:\n- mental health feelings like stress, anxiety, sadness, loneliness, or panic\n- physical discomfort like fever, cold, cough, headache, stomach pain, dizziness, or fatigue\n- simple self-care guidance and next-step suggestions\n\nTry telling me what you feel, what symptoms you have, or what kind of help you want.",
+        "meta": {
+          "sentiment": "negative",
+          "intent": "symptom_report",
+          "topic": "general",
+          "intent_confidence": 0.2667,
+          "sentiment_confidence": 0.3953,
+          "fallback_used": true,
+          "ml_used": true,
+          "llm_enabled": false,
+          "llm_loaded": false,
+          "llm_provider": "openrouter"
+        }
+      },
+      {
+        "id": "cd5db2609cd643ebadaf48b885dec037",
+        "created_at": "2026-04-17T11:44:12.423563+00:00",
+        "user": "hi",
+        "bot": "I may not be understanding that clearly yet, but I still want to help.\n\nI can best support you with:\n- mental health feelings like stress, anxiety, sadness, loneliness, or panic\n- physical discomfort like fever, cold, cough, headache, stomach pain, dizziness, or fatigue\n- simple self-care guidance and next-step suggestions\n\nTry telling me what you feel, what symptoms you have, or what kind of help you want.",
+        "meta": {
+          "sentiment": "negative",
+          "intent": "symptom_report",
+          "topic": "general",
+          "intent_confidence": 0.2667,
+          "sentiment_confidence": 0.3953,
+          "fallback_used": true,
+          "ml_used": true,
+          "llm_enabled": false,
+          "llm_loaded": false,
+          "llm_provider": "openrouter"
+        }
+      }
+    ]
+  }
+}

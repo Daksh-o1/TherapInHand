@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}TherapInHand | Profile{% endblock %}
+
+{% block content %}
+<main class="page page-profile">
+  <section class="profile-layout">
+    <article class="panel profile-card">
+      <span class="eyebrow">Profile</span>
+      <h1>{{ user.name if user else "Guest user" }}</h1>
+      <p class="profile-copy">
+        {% if user %}
+        Signed in as {{ user.email }}. Your chats and theme preferences sync to this account.
+        {% else %}
+        Theme preferences stay in this browser while chat history remains temporary to this guest session.
+        {% endif %}
+      </p>
+      <div class="profile-meta">
+        <div class="meta-pill">{% if user %}Persistent profile{% else %}Guest mode{% endif %}</div>
+        <div class="meta-pill">Solid + gradient accents</div>
+        <div class="meta-pill">Light, dark, or system</div>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-secondary" href="{{ url_for('chat_page') }}">View Chat History</a>
+      </div>
+
+      {% if user %}
+      <form id="profileForm" class="profile-form">
+        <label class="field">
+          <span>Username</span>
+          <input id="profileUsername" name="username" type="text" value="{{ user.username or user.name }}" required />
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input id="profileEmail" name="email" type="email" value="{{ user.email }}" required />
+        </label>
+      </form>
+      {% else %}
+      <div class="guest-note">
+        <p>Sign in when you want your appearance settings and multi-chat history to follow you across devices.</p>
+        <div class="hero-actions">
+          <a class="btn btn-secondary" href="{{ url_for('login_page') }}">Login</a>
+          <a class="btn btn-primary" href="{{ url_for('register_page') }}">Create Account</a>
+        </div>
+      </div>
+      {% endif %}
+    </article>
+
+    <section class="panel theme-panel">
+      <div class="theme-panel-head">
+        <div>
+          <span class="eyebrow">Appearance</span>
+          <h2>Customize your assistant</h2>
+        </div>
+        <button id="saveThemeBtn" type="button" class="btn btn-primary">Save Preferences</button>
+      </div>
+
+      <div class="theme-section">
+        <h3>Accent color</h3>
+        <div class="theme-grid" id="solidThemeGrid">
+          {% for key, label in themes.solids.items() %}
+          <button type="button" class="theme-card solid-card" data-accent="{{ key }}" data-theme-name="{{ key }}">
+            <span class="theme-swatch swatch-{{ key }}"></span>
+            <strong>{{ label }}</strong>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="theme-section">
+        <h3>Gradient background</h3>
+        <div class="theme-grid" id="gradientThemeGrid">
+          {% for key, label in themes.gradients.items() %}
+          <button type="button" class="theme-card gradient-card" data-gradient="{{ key }}">
+            <span class="gradient-preview gradient-{{ key }}"></span>
+            <strong>{{ label }}</strong>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="theme-section">
+        <h3>Appearance mode</h3>
+        <div class="mode-switcher" id="modeSwitcher">
+          {% for key, label in themes.modes.items() %}
+          <button type="button" class="mode-pill" data-mode="{{ key }}">{{ label }}</button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="theme-preview panel">
+        <div class="preview-header">
+          <span class="eyebrow">Preview</span>
+          <span class="status-chip" id="profileThemeSummary">System mode</span>
+        </div>
+        <div class="preview-window">
+          <div class="preview-sidebar"></div>
+          <div class="preview-chat">
+            <div class="preview-bubble preview-bubble-user">You are doing well. One step at a time.</div>
+            <div class="preview-bubble preview-bubble-bot">I can help you slow this down and work through it.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.TherapInHandProfileConfig = {
+    user: {{ (user or {}) | tojson }},
+    themes: {{ themes | tojson }},
+    defaults: {{ theme_defaults | tojson }},
+    saveUrl: "{{ url_for('api_theme') }}",
+    profileUrl: "{{ url_for('profile_update') }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+{% endblock %}
