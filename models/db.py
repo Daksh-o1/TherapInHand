@@ -6,6 +6,8 @@ from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, inspect, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
+from config import startup_diagnostics
 
 
 db = SQLAlchemy()
@@ -143,6 +145,7 @@ def init_database(app):
     if not database_uri:
         raise RuntimeError("SQLALCHEMY_DATABASE_URI is not configured")
     url = make_url(database_uri)
+    database_scheme = url.drivername
     if url.drivername.startswith("sqlite") and url.database:
         from pathlib import Path
         db_path = Path(url.database)
@@ -152,8 +155,17 @@ def init_database(app):
     if "sqlalchemy" not in app.extensions:
         db.init_app(app)
     with app.app_context():
-        db.create_all()
-        ensure_database_schema()
+        try:
+            db.create_all()
+            ensure_database_schema()
+            db.session.execute(text("SELECT 1"))
+            app.logger.info("database_connected scheme=%s", database_scheme)
+        except OperationalError:
+            app.logger.exception("database_operational_error uri=%s", startup_diagnostics().get("database_uri"))
+            raise
+        except Exception:
+            app.logger.exception("database_initialization_failed uri=%s", startup_diagnostics().get("database_uri"))
+            raise
 
 
 def save_chat_record(session_id, user_message, bot_response, intent, sentiment, timestamp=None):

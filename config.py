@@ -1,12 +1,16 @@
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 
 
 BASE_DIR = Path(__file__).resolve().parent
 ENV_FILE = BASE_DIR / ".env"
-DEFAULT_SQLITE_PATH = BASE_DIR / "therapinhand.sqlite3"
+
+
+DEFAULT_SQLITE_PATH = Path("therapinhand.sqlite3")
+
 BASE_LOG_DIR = BASE_DIR / "logs"
 
 os.makedirs(BASE_LOG_DIR, exist_ok=True)
@@ -69,12 +73,40 @@ def env_list(name: str, default=None) -> list[str]:
     return [item.strip() for item in str(value).split(",") if item.strip()]
 
 
+def _normalize_filesystem_path(value: str | Path) -> Path:
+    raw = str(value or "").strip().replace("\\", "/")
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    return path.resolve()
+
+
+def _sqlite_database_uri(path_value: str | Path) -> str:
+    raw_path = Path(str(path_value or "").strip().replace("\\", "/"))
+    resolved_path = _normalize_filesystem_path(raw_path)
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    if raw_path.is_absolute():
+        return f"sqlite:///{resolved_path.as_posix()}"
+    relative_posix = raw_path.as_posix().lstrip("./")
+    return f"sqlite:///{relative_posix or DEFAULT_SQLITE_PATH.as_posix()}"
+
+
 def _normalized_database_url(value: str) -> str:
     url = (value or "").strip()
     if not url:
-        return f"sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}"
+        return _sqlite_database_uri(DEFAULT_SQLITE_PATH)
     if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://"):]
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("sqlite:///"):
+        sqlite_target = url[len("sqlite:///"):]
+        if sqlite_target == ":memory:":
+            return "sqlite:///:memory:"
+        return _sqlite_database_uri(sqlite_target)
+    if url.startswith("sqlite://"):
+        sqlite_target = url[len("sqlite://"):]
+        if sqlite_target == "/:memory:":
+            return "sqlite:///:memory:"
+        return _sqlite_database_uri(sqlite_target.lstrip("/"))
     return url
 
 
@@ -83,13 +115,41 @@ def _default_secure_cookies() -> bool:
 
 
 def _engine_options(database_uri: str) -> dict:
-    options = {
-        "pool_pre_ping": True,
-        "pool_recycle": env_int("DB_POOL_RECYCLE_SECONDS", 1800),
-    }
-    if database_uri.startswith("sqlite:///"):
-        options["connect_args"] = {"check_same_thread": False}
+    options = {"pool_pre_ping": True}
+    if database_uri.startswith("sqlite:///") or database_uri == "sqlite:///:memory:":
+        options["connect_args"] = {
+            "check_same_thread": False,
+            "timeout": env_int("SQLITE_TIMEOUT_SECONDS", 30),
+        }
+    else:
+        options.update({
+            "pool_recycle": env_int("DB_POOL_RECYCLE_SECONDS", 1800),
+            "pool_size": env_int("DB_POOL_SIZE", 5),
+            "max_overflow": env_int("DB_MAX_OVERFLOW", 10),
+            "pool_timeout": env_int("DB_POOL_TIMEOUT_SECONDS", 30),
+        })
     return options
+
+
+def _masked_database_url(database_uri: str) -> str:
+    if not database_uri:
+        return ""
+    try:
+        parsed = urlsplit(database_uri)
+        if parsed.password:
+            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
+            return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+    except Exception:
+        return database_uri
+    return database_uri
+
+
+def ensure_runtime_directories() -> None:
+    BASE_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _normalize_filesystem_path(DEFAULT_SQLITE_PATH).parent.mkdir(parents=True, exist_ok=True)
+
+
+ensure_runtime_directories()
 
 
 class BaseConfig:
@@ -149,6 +209,7 @@ class BaseConfig:
     OPENROUTER_TIMEOUT = env_int("OPENROUTER_TIMEOUT", 45)
     OPENROUTER_MAX_RETRIES = env_int("OPENROUTER_MAX_RETRIES", 2)
     OPENROUTER_RETRY_BACKOFF_SECONDS = env_float("OPENROUTER_RETRY_BACKOFF_SECONDS", 1.5)
+    STARTUP_DIAGNOSTICS = env_bool("STARTUP_DIAGNOSTICS", default=True)
 
 
 class DevelopmentConfig(BaseConfig):
@@ -186,6 +247,19 @@ def openrouter_runtime_settings() -> dict:
         "timeout": env_int("OPENROUTER_TIMEOUT", 45),
         "max_retries": env_int("OPENROUTER_MAX_RETRIES", 2),
         "retry_backoff_seconds": env_float("OPENROUTER_RETRY_BACKOFF_SECONDS", 1.5),
+    }
+
+
+def startup_diagnostics() -> dict:
+    config_class = get_config_class()
+    return {
+        "environment": config_class.APP_ENV,
+        "debug": bool(config_class.DEBUG),
+        "port": int(config_class.PORT),
+        "database_uri": _masked_database_url(config_class.SQLALCHEMY_DATABASE_URI),
+        "database_scheme": config_class.SQLALCHEMY_DATABASE_URI.split("://", 1)[0],
+        "openrouter_enabled": bool(config_class.USE_OPENROUTER_CHAT),
+        "trusted_hosts": list(config_class.TRUSTED_HOSTS),
     }
 
 

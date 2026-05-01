@@ -17,6 +17,7 @@ Required production variables:
 - `REMEMBER_COOKIE_SECURE=1`
 - `TRUSTED_HOSTS=<your deployed host names>`
 - `CORS_ORIGINS=<comma-separated allowed origins>`
+- `PORT` is provided automatically by Render and Railway
 
 Optional but recommended:
 
@@ -24,6 +25,7 @@ Optional but recommended:
 - `OPENROUTER_MAX_RETRIES=2`
 - `OPENROUTER_TIMEOUT=45`
 - `MAX_CONTENT_LENGTH=1048576`
+- `STARTUP_DIAGNOSTICS=1`
 
 ## 2. Install dependencies
 
@@ -34,7 +36,7 @@ pip install -r requirements.txt
 ## 3. Local production-style run
 
 ```bash
-gunicorn --bind 0.0.0.0:5000 --workers 3 --threads 2 --timeout 120 --graceful-timeout 30 wsgi:application
+gunicorn wsgi:application
 ```
 
 ## 4. Platform notes
@@ -42,19 +44,20 @@ gunicorn --bind 0.0.0.0:5000 --workers 3 --threads 2 --timeout 120 --graceful-ti
 ### Render
 
 - Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn --bind 0.0.0.0:$PORT --workers 3 --threads 2 --timeout 120 --graceful-timeout 30 wsgi:application`
+- Start command: `gunicorn wsgi:application`
 - Health check path: `/health`
 - Use PostgreSQL and set `DATABASE_URL` from the managed database
+- Do not rely on SQLite for persistent Render production storage because the filesystem is ephemeral
 
 ### Railway
 
-- Start command: `gunicorn --bind 0.0.0.0:$PORT --workers 3 --threads 2 --timeout 120 --graceful-timeout 30 wsgi:application`
+- Start command: `gunicorn wsgi:application`
 - Add a PostgreSQL service and connect its `DATABASE_URL`
 - Add all secrets from the production env list above
 
 ### Replit
 
-- Run command: `gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120 wsgi:application`
+- Run command: `gunicorn wsgi:application`
 - Set secrets through the Replit Secrets UI
 - SQLite can work for quick demos, but PostgreSQL is recommended for shared deployments
 
@@ -74,6 +77,7 @@ gunicorn --bind 0.0.0.0:5000 --workers 3 --threads 2 --timeout 120 --graceful-ti
 ## 5. Post-deploy checks
 
 - Open `/health` and confirm `{"status":"ok"}`
+- Open `/debug/openrouter-test` with `X-Admin-Key` in production if you need a live OpenRouter check
 - Register a user
 - Log in and out
 - Continue as guest

@@ -2,9 +2,12 @@
 .venv/
 venv/
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.sqlite3
+*.sqlite3-journal
 *.db
+data/
 logs/
 instance/
 .pytest_cache/

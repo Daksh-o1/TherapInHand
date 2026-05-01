@@ -12,7 +12,7 @@ import json
 import os
 import re
 import uuid
-from config import ADMIN_KEY, PORT, get_config_class, load_environment
+from config import ADMIN_KEY, PORT, get_config_class, load_environment, startup_diagnostics
 
 # Import keyword maps from the keywords package
 from keywords import (
@@ -159,14 +159,17 @@ LEGACY_CHAT_DB_ENABLED = bool(app.config.get("LEGACY_CHAT_DB_ENABLED"))
 if LEGACY_CHAT_DB_ENABLED:
     init_chat_db(CHAT_DB_PATH)
 init_database(app)
-app.logger.info(
-    "startup_complete env=%s debug=%s database=%s legacy_chat_db=%s openrouter_enabled=%s",
-    app.config.get("APP_ENV"),
-    app.config.get("DEBUG"),
-    app.config.get("SQLALCHEMY_DATABASE_URI", "").split("://", 1)[0],
-    LEGACY_CHAT_DB_ENABLED,
-    openrouter_enabled(),
-)
+if app.config.get("STARTUP_DIAGNOSTICS", True):
+    diagnostics = startup_diagnostics()
+    app.logger.info(
+        "startup_complete env=%s debug=%s port=%s database_uri=%s legacy_chat_db=%s openrouter_enabled=%s",
+        diagnostics["environment"],
+        diagnostics["debug"],
+        diagnostics["port"],
+        diagnostics["database_uri"],
+        LEGACY_CHAT_DB_ENABLED,
+        diagnostics["openrouter_enabled"],
+    )
 
 
 def _now_iso():
@@ -2372,8 +2375,9 @@ def health():
 
 @app.route("/debug/openrouter-test", methods=["GET"])
 def debug_openrouter_test():
-    if not app.config.get("DEBUG"):
-        return jsonify({"error": "not_found"}), 404
+    key = request.headers.get("X-Admin-Key", "")
+    if not app.config.get("DEBUG") and key != ADMIN_KEY:
+        return jsonify({"error": "unauthorized"}), 403
     prompt = "Reply with: OpenRouter connection successful."
     app.logger.info("debug_openrouter_test_started")
     raw_response = direct_openrouter_test(prompt)
@@ -2438,5 +2442,8 @@ def create_app():
     return app
 
 
+application = app
+
+
 if __name__ == "__main__":
-    app.run(debug=app.config.get("DEBUG", False), port=PORT)
+    app.run(host="0.0.0.0", debug=app.config.get("DEBUG", False), port=PORT)
