@@ -47,7 +47,13 @@ from models import (
     touch_user_login,
     update_user_profile,
 )
-from rule_responder import RULE_LANGUAGE_KEY, detect_health_subtopic, extract_context_entities, generate_response
+from rule_responder import (
+    RULE_LANGUAGE_KEY,
+    detect_health_subtopic,
+    extract_context_entities,
+    friendly_fallback_message,
+    generate_response,
+)
 from services.auth import consume_auth_attempt, get_or_create_csrf_token, reset_auth_attempts, validate_csrf
 from services.ai_handler import (
     ai_fallback_reason,
@@ -651,10 +657,22 @@ def match_keyword_intent(text, lang):
 
 EMOTIONAL_KEYWORD_GROUPS = {
     "sad": ["sad", "unhappy", "low", "down", "udas", "dukhi"],
-    "depression": ["depressed", "hopeless", "empty", "numb"],
-    "anxiety": ["anxious", "panic", "overthinking", "stressed", "stress", "anxiety"],
+    "depression": ["depression", "depressed", "hopeless", "empty", "numb", "heartbreak"],
+    "anxiety": ["anxious", "panic", "overthinking", "stressed", "stress", "anxiety", "emotionally exhausted", "emotional exhaustion"],
     "loneliness": ["lonely", "isolated", "nobody", "alone", "akela", "akeli"],
 }
+POSITIVE_EMOTION_KEYWORDS = [
+    "happy", "excited", "relieved", "peaceful", "motivated",
+    "hopeful", "grateful", "confident", "feeling better",
+    "better now", "proud",
+]
+CRISIS_ROUTE_KEYWORDS = [
+    "i want to die", "want to die", "kill myself", "end my life",
+    "suicidal", "self harm", "self-harm", "hurt myself",
+]
+CASUAL_ROUTE_KEYWORDS = [
+    "hello", "hi", "hey", "how are you", "what's up", "whats up",
+]
 
 EMOTIONAL_INTENT_PRIORITY = {
     "emergency": 1,
@@ -699,18 +717,34 @@ def detect_emotional_keywords(text):
     return ordered
 
 
+def detect_positive_emotion_keywords(text):
+    text_lower = text.lower()
+    return [item for item in POSITIVE_EMOTION_KEYWORDS if _kw_match(item, text_lower)]
+
+
 def detect_priority_route(text, lang, keyword_match=None):
     keyword_match = keyword_match or {"matched": False, "matched_keywords": [], "intent": "general_query"}
+    text_lower = text.lower()
     emotional_matches = detect_emotional_keywords(text)
+    positive_matches = detect_positive_emotion_keywords(text)
     effective_lang = "hinglish" if lang == "hi" and prefers_hinglish(text) else lang
+    detected_topic = detect_topic(text, lang)
     health_subtopic = detect_health_subtopic(text, effective_lang)
     extracted_entities = extract_context_entities(text, effective_lang)
     physical_conditions = detect_physical_conditions(text, lang)
-    has_physical_signal = bool(health_subtopic or physical_conditions)
+    health_kind = health_subtopic.get("kind") if health_subtopic else ""
+    has_physical_signal = bool(
+        physical_conditions
+        or (health_subtopic and health_kind in {"symptom", "disease"})
+        or detected_topic == "physical_discomfort"
+    )
     has_emotional_signal = bool(emotional_matches)
-    override_reason = ""
+    mental_phrase_priority = any(
+        _kw_match(item, text_lower)
+        for item in ["sad", "depressed", "depression", "lonely", "anxious", "stress", "hopeless", "overthinking", "heartbreak", "emotionally exhausted", "udas", "dukhi"]
+    )
 
-    if keyword_match.get("intent") == "emergency":
+    if keyword_match.get("intent") == "emergency" or any(_kw_match(item, text_lower) for item in CRISIS_ROUTE_KEYWORDS):
         return {
             "intent": "emergency",
             "priority": EMOTIONAL_INTENT_PRIORITY["emergency"],
@@ -719,18 +753,40 @@ def detect_priority_route(text, lang, keyword_match=None):
             "health_subtopic": health_subtopic,
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
+            "category": "crisis",
+            "confidence": 1.0,
+            "dataset_match": "crisis_keywords",
+            "fallback_reason": "",
         }
 
-    if has_emotional_signal and (not has_physical_signal or any(_kw_match(item, text.lower()) for item in ["sad", "depressed", "lonely", "anxious", "udas", "dukhi"])):
-        override_reason = "emotional_priority_over_physical"
+    if positive_matches:
+        return {
+            "intent": "general_query",
+            "priority": 2,
+            "matched_keywords": positive_matches,
+            "override_reason": "positive_emotion_priority",
+            "health_subtopic": None,
+            "emotional_matches": emotional_matches,
+            "entities": extracted_entities,
+            "category": "positive_emotion",
+            "confidence": 0.98,
+            "dataset_match": "positive_emotion_keywords",
+            "fallback_reason": "",
+        }
+
+    if has_emotional_signal and (not has_physical_signal or mental_phrase_priority):
         return {
             "intent": "emotional_support",
             "priority": EMOTIONAL_INTENT_PRIORITY["emotional_support"],
             "matched_keywords": emotional_matches,
-            "override_reason": override_reason,
+            "override_reason": "emotional_priority_over_physical",
             "health_subtopic": health_subtopic,
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
+            "category": "mental_emotional",
+            "confidence": 0.96,
+            "dataset_match": "mental_health_keywords",
+            "fallback_reason": "",
         }
 
     if health_subtopic and health_subtopic.get("kind") == "disease":
@@ -742,6 +798,10 @@ def detect_priority_route(text, lang, keyword_match=None):
             "health_subtopic": health_subtopic,
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
+            "category": "physical_symptom",
+            "confidence": 0.92,
+            "dataset_match": health_subtopic.get("name", "disease"),
+            "fallback_reason": "",
         }
 
     if has_physical_signal:
@@ -753,17 +813,25 @@ def detect_priority_route(text, lang, keyword_match=None):
             "health_subtopic": health_subtopic,
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
+            "category": "physical_symptom",
+            "confidence": 0.9,
+            "dataset_match": (health_subtopic or {}).get("name") or ",".join(physical_conditions[:2]) or "physical_signal",
+            "fallback_reason": "",
         }
 
-    if keyword_match.get("intent") in CASUAL_INTENTS:
+    if keyword_match.get("intent") in CASUAL_INTENTS or any(_kw_match(item, text_lower) for item in CASUAL_ROUTE_KEYWORDS):
         return {
-            "intent": keyword_match.get("intent"),
+            "intent": keyword_match.get("intent") if keyword_match.get("intent") in CASUAL_INTENTS else "casual_checkin",
             "priority": EMOTIONAL_INTENT_PRIORITY["casual_checkin"],
-            "matched_keywords": keyword_match.get("matched_keywords", []),
+            "matched_keywords": keyword_match.get("matched_keywords", []) or [item for item in CASUAL_ROUTE_KEYWORDS if _kw_match(item, text_lower)],
             "override_reason": "casual_priority",
             "health_subtopic": health_subtopic,
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
+            "category": "casual_conversation",
+            "confidence": 0.88,
+            "dataset_match": "casual_intent",
+            "fallback_reason": "",
         }
 
     return {
@@ -774,6 +842,10 @@ def detect_priority_route(text, lang, keyword_match=None):
         "health_subtopic": health_subtopic,
         "emotional_matches": emotional_matches,
         "entities": extracted_entities,
+        "category": "ai_fallback",
+        "confidence": 0.4,
+        "dataset_match": "none",
+        "fallback_reason": "no_specific_route_match",
     }
 
 
@@ -1774,7 +1846,7 @@ def build_response(intent, sentiment, topic, lang, text=""):
 
 def build_response_with_optional_llm(intent, sentiment, topic, lang, text="", keyword_match=None):
     keyword_match = keyword_match or {"matched": False, "intent": intent}
-    resolved_intent = keyword_match["intent"] if keyword_match.get("matched") else intent
+    resolved_intent = intent
     rule_response = build_response(resolved_intent, sentiment, topic, lang, text)
     ai_reason = ai_fallback_reason(resolved_intent, keyword_match, lang, text, session, topic=topic)
     logging.info(
@@ -2230,6 +2302,7 @@ def chat():
         priority_route = detect_priority_route(user_message, lang, keyword_match)
         detected_subtopic = priority_route.get("health_subtopic")
         resolved_intent = priority_route.get("intent") or (keyword_match["intent"] if keyword_match.get("matched") else intent)
+        detected_category = priority_route.get("category", "ai_fallback")
         matched_keywords = priority_route.get("matched_keywords") or keyword_match.get("matched_keywords", [])
         extracted_entities = priority_route.get("entities") or {}
         entity_reasoning = summarize_entity_reasoning(extracted_entities)
@@ -2249,23 +2322,28 @@ def chat():
             fallback_used = False
 
         logging.info(
-            "routing_decision intent=%s topic=%s subtopic=%s matched_keywords=%s entities=%s reasoning=%s override_reason=%s ai_reason=%s fallback=%s",
+            "routing_decision category=%s intent=%s topic=%s subtopic=%s intent_confidence=%.4f sentiment_confidence=%.4f matched_keywords=%s entities=%s reasoning=%s override_reason=%s dataset_match=%s ai_reason=%s fallback=%s fallback_reason=%s",
+            detected_category,
             resolved_intent,
             topic,
             detected_subtopic["name"] if detected_subtopic else "none",
+            intent_confidence,
+            sentiment_confidence,
             matched_keywords[:6],
             extracted_entities,
             entity_reasoning,
             priority_route.get("override_reason") or "none",
+            priority_route.get("dataset_match") or "none",
             ai_reason or "none",
             fallback_used,
+            priority_route.get("fallback_reason") or "none",
         )
 
         if fallback_used:
             if lang == "hi":
-                response = fallback_hinglish() if prefers_hinglish(user_message) else fallback_hi()
+                response = friendly_fallback_message("hinglish" if prefers_hinglish(user_message) else "hi", user_text=user_message)
             else:
-                response = fallback_en()
+                response = friendly_fallback_message(lang, user_text=user_message)
         else:
             response = build_response_with_optional_llm(
                 resolved_intent,
@@ -2288,19 +2366,24 @@ def chat():
             "sentiment": sentiment,
             "intent": resolved_intent,
             "topic": topic,
+            "category": detected_category,
             "subtopic": detected_subtopic["name"] if detected_subtopic else None,
             "entities": extracted_entities,
             "entity_reasoning": entity_reasoning,
             "intent_confidence": round(intent_confidence, 4),
             "sentiment_confidence": round(sentiment_confidence, 4),
             "fallback_used": fallback_used,
+            "fallback_reason": priority_route.get("fallback_reason") or ("legacy_fallback_rules" if fallback_used else None),
             "ml_used": lang == "en",
             "keyword_match": keyword_match.get("matched", False),
             "matched_keywords": matched_keywords[:6],
             "priority_override_reason": priority_route.get("override_reason") or None,
+            "dataset_match": priority_route.get("dataset_match") or None,
             "llm_enabled": openrouter_enabled(),
             "llm_loaded": openrouter_status().get("configured", False),
             "llm_provider": "openrouter",
+            "ai_usage": bool(ai_reason),
+            "ai_reason": ai_reason or None,
             "repeat_intent_hits": repeat_intent_hits,
             "repeat_topic_hits": repeat_topic_hits,
         }
@@ -2359,9 +2442,9 @@ def chat():
             "duplicate": False,
         })
     except Exception:
-        app.logger.exception("chat_request_failed")
+        app.logger.exception("chat_request_failed response_generation_error=true")
         return jsonify({
-            "response": "I am having trouble responding right now. Please try again in a moment.",
+            "response": "I'm here with you. Tell me a little more about what's going on.",
             "duplicate": False,
         }), 500
     finally:

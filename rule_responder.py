@@ -48,6 +48,166 @@ SUPPORT_TOPIC_HINTS = {
         "protein_digestion_issues",
     ],
 }
+MENTAL_HEALTH_KEYWORDS = {
+    "en": [
+        "depression", "depressed", "lonely", "loneliness", "stress", "stressed",
+        "anxiety", "anxious", "emotional exhaustion", "emotionally exhausted",
+        "exhausted emotionally", "overthinking", "heartbreak", "hopeless",
+        "empty", "numb", "burnout", "burned out",
+    ],
+    "hinglish": [
+        "depression", "depressed", "lonely", "stress", "anxiety", "overthinking",
+        "hopeless", "burnout", "emotionally exhausted", "heartbreak",
+    ],
+}
+POSITIVE_EMOTION_KEYWORDS = {
+    "en": [
+        "happy", "excited", "relieved", "peaceful", "motivated", "hopeful",
+        "grateful", "confident", "feeling better", "better now", "proud",
+    ],
+    "hinglish": [
+        "happy", "excited", "relieved", "peaceful", "motivated", "hopeful",
+        "grateful", "confident", "feeling better", "proud",
+    ],
+}
+POSITIVE_RESPONSE_DATA = {
+    "en": {
+        "validation": [
+            "That's really good to hear.",
+            "I'm glad things are feeling a little lighter.",
+            "You should give yourself credit for that progress.",
+        ],
+        "reinforcement": [
+            "Moments like this matter, especially if things have felt heavy lately.",
+            "It can help to notice what has been supporting you so you can keep some of that momentum going.",
+            "Holding onto the small things that are helping can make this feeling easier to carry forward.",
+        ],
+        "suggestions": [
+            "If you can, try to protect the habits that are helping, like rest, food, movement, sunlight, or staying connected with people who feel grounding.",
+            "A simple way to build on it is to keep doing one or two things that helped you get here.",
+            "If this shift feels meaningful, it may help to slow down for a second and appreciate it instead of rushing past it.",
+        ],
+        "follow_ups": [
+            "Want to talk about what's been going well?",
+            "Do you know what helped you feel this way today?",
+            "",
+        ],
+    },
+    "hinglish": {
+        "validation": [
+            "Ye sunke sach me achha laga.",
+            "I'm glad cheezein thodi halki feel ho rahi hain.",
+            "Is progress ka credit tumhe dena chahiye.",
+        ],
+        "reinforcement": [
+            "Aise moments important hote hain, especially jab pehle sab heavy lag raha ho.",
+            "Jo cheezein help kar rahi hain unhe notice karna useful ho sakta hai, taaki momentum bana rahe.",
+            "Jo halka feel ho raha hai usko thoda hold karna bhi important hai.",
+        ],
+        "suggestions": [
+            "Agar ho sake to un habits ko protect karo jo help kar rahi hain, jaise rest, paani, movement, sunlight, ya achhe logon se connected rehna.",
+            "Ek simple next step ye ho sakta hai ki jo 1 ya 2 cheezein help kar rahi hain, unhe continue rakho.",
+            "Agar ye shift meaningful lag rahi hai, to ek second rukkar isse appreciate karna bhi achha hota hai.",
+        ],
+        "follow_ups": [
+            "Kya lagta hai, aaj kya cheez better gayi?",
+            "Want to talk about what's been helping?",
+            "",
+        ],
+    },
+}
+MENTAL_HEALTH_RESPONSE_DATA = {
+    "en": {
+        "validation": [
+            "I'm really sorry you're dealing with that.",
+            "That sounds heavy, and it makes sense that you're feeling worn down.",
+            "I can understand why that would feel like a lot to carry.",
+        ],
+        "effects": {
+            "depression": "Depression can make even simple things feel exhausting and heavy, and it can affect energy, sleep, motivation, and concentration.",
+            "loneliness": "Loneliness can start to affect mood, confidence, energy, and the way everyday things feel.",
+            "stress": "Stress can build up in your body and mind until everything starts feeling tighter, louder, and harder to manage.",
+            "anxiety": "Anxiety can make your thoughts race and keep your body stuck in a constant state of tension or alertness.",
+            "emotional_exhaustion": "Emotional exhaustion can leave you feeling flat, foggy, irritable, or like you have nothing left to give.",
+            "overthinking": "Overthinking can trap you in loops where your mind keeps searching for certainty but only feels more drained.",
+            "heartbreak": "Heartbreak can affect sleep, appetite, concentration, and make ordinary moments feel unusually painful.",
+            "hopelessness": "Hopelessness can make it hard to imagine relief, even when what you're feeling may still shift with support and time.",
+            "general": "When you're carrying emotional pain, it can affect sleep, energy, motivation, concentration, and your ability to do everyday things.",
+        },
+        "suggestions": [
+            "For right now, it may help to keep the next step very small: water, a shower, a short walk, fresh air, or messaging one trusted person.",
+            "Sometimes the goal is not to fix everything, just to reduce the intensity a little with food, hydration, rest, sunlight, movement, or connection.",
+            "If this has been sticking around, talking to someone you trust or a mental health professional could make this feel less isolating.",
+        ],
+        "follow_ups": {
+            "depression": "Has this been building slowly, or has something specific made it feel worse lately?",
+            "loneliness": "Has this been feeling more like disconnection from people, or like you're around others but still feel alone?",
+            "stress": "Is there one main thing putting the most pressure on you right now?",
+            "anxiety": "Is your anxiety feeling more mental, more physical, or both right now?",
+            "emotional_exhaustion": "Have you been feeling emotionally drained for a while, or did it spike recently?",
+            "overthinking": "Does your mind keep circling one specific worry, or is it everything at once?",
+            "heartbreak": "Did something happen recently, or has this been sitting with you for a while?",
+            "hopelessness": "Are you feeling safe right now while you're carrying this?",
+            "general": "Has this been building slowly, or did something specific trigger it?",
+        },
+    },
+    "hinglish": {
+        "validation": [
+            "Mujhe afsos hai ki tum itna heavy feel kar rahe ho.",
+            "Ye kaafi tough lag raha hai, aur aisa feel karna samajh aata hai.",
+            "Main samajh sakta hoon ki ye kitna draining lag sakta hai.",
+        ],
+        "effects": {
+            "general": "Jab emotional load zyada ho jata hai, to energy, sleep, motivation, focus, sab effect ho sakte hain.",
+        },
+        "suggestions": [
+            "Abhi ke liye next step bahut chhota rakho: paani piyo, thodi fresh air lo, face wash karo, ya kisi trusted insaan ko message karo.",
+            "Goal sab kuch solve karna nahi hai, bas intensity ko thoda kam karna hai with rest, hydration, sunlight, movement, ya connection.",
+            "Agar ye kaafi time se chal raha hai, kisi trusted person ya mental health professional se baat karna genuinely help kar sakta hai.",
+        ],
+        "follow_ups": {
+            "general": "Ye dheere dheere build hua hai, ya kuch specific hua tha jisne trigger kiya?",
+        },
+    },
+}
+MENTAL_SUBTOPIC_MAP = {
+    "depression": "depression",
+    "depressed": "depression",
+    "lonely": "loneliness",
+    "loneliness": "loneliness",
+    "stress": "stress",
+    "stressed": "stress",
+    "anxiety": "anxiety",
+    "anxious": "anxiety",
+    "emotionally exhausted": "emotional_exhaustion",
+    "emotional exhaustion": "emotional_exhaustion",
+    "overthinking": "overthinking",
+    "heartbreak": "heartbreak",
+    "hopeless": "hopelessness",
+    "hopelessness": "hopelessness",
+}
+FRIENDLY_FALLBACKS = {
+    "en": "I'm here with you. Tell me a little more about what's going on.",
+    "hinglish": "Main yahin hoon. Thoda aur batao ki kya chal raha hai.",
+}
+GENERIC_PHYSICAL_RESPONSE_DATA = {
+    "en": {
+        "validation": "That sounds uncomfortable.",
+        "causes": "Physical symptoms like this can come from something mild like irritation, infection, dehydration, poor sleep, or something else that needs a closer look.",
+        "care": "For now, rest if you can, keep up fluids, avoid anything that makes it worse, and keep an eye on whether the symptom is easing or getting stronger.",
+        "medication": "Only use over-the-counter medicine if it fits the symptom and you can take it safely as directed on the label.",
+        "warning": "Please get medical care sooner if it becomes severe, keeps getting worse, or comes with red flags like breathing trouble, chest pain, fainting, confusion, repeated vomiting, or dehydration.",
+        "follow_up": "If you want, tell me where it hurts, how long it has been going on, and whether anything else came with it.",
+    },
+    "hinglish": {
+        "validation": "Ye uncomfortable lag raha hai.",
+        "causes": "Aise physical symptoms kabhi mild irritation, infection, dehydration, low sleep, ya kisi aur cause se aa sakte hain jise thoda closely dekhna padta hai.",
+        "care": "Abhi ke liye rest karo, fluids lo, jo cheez isse worse kar rahi ho usse avoid karo, aur dekho symptom settle ho raha hai ya strong hota ja raha hai.",
+        "medication": "Over-the-counter medicine tabhi lo jab symptom ke hisaab se sahi ho aur tum use safely label ke mutabik le sako.",
+        "warning": "Agar ye severe ho, worse hota jaye, ya breathing problem, chest pain, fainting, confusion, repeated vomiting, ya dehydration jaisi red flags ho to jaldi medical care lo.",
+        "follow_up": "Chaho to batao pain ya symptom kahan hai, kab se hai, aur saath me aur kya feel ho raha hai.",
+    },
+}
 RECENT_STYLE_LIMIT = 5
 RECENT_BLUEPRINT_LIMIT = 6
 RECENT_PHRASE_LIMIT = 14
@@ -547,6 +707,91 @@ def _has_emergency_signal(text, support_lang):
     return _contains_any(text, EMERGENCY_KEYWORDS.get(support_lang, []) + EMERGENCY_KEYWORDS.get("en", []))
 
 
+def _matched_keywords(text, keywords):
+    return [keyword for keyword in keywords if _contains_keyword(text, keyword)]
+
+
+def _detect_positive_subtopic(text, support_lang):
+    matches = _matched_keywords(text, POSITIVE_EMOTION_KEYWORDS.get(support_lang, []) + POSITIVE_EMOTION_KEYWORDS.get("en", []))
+    return matches[0] if matches else ""
+
+
+def _detect_mental_subtopic(text, support_lang):
+    matches = _matched_keywords(text, MENTAL_HEALTH_KEYWORDS.get(support_lang, []) + MENTAL_HEALTH_KEYWORDS.get("en", []))
+    for match in matches:
+        subtopic = MENTAL_SUBTOPIC_MAP.get(match)
+        if subtopic:
+            return subtopic
+    return "general" if matches else ""
+
+
+def _classify_response_route(intent, topic, lang, user_text=""):
+    support_lang = _support_language(lang, user_text=user_text) or "en"
+    normalized = _normalize_text(user_text)
+    positive_subtopic = _detect_positive_subtopic(normalized, support_lang)
+    mental_subtopic = _detect_mental_subtopic(normalized, support_lang)
+    casual_kind = _casual_query_kind(user_text)
+    physical_signal = topic == "physical_discomfort" or intent in {"symptom_report", "solution_request"}
+
+    if intent == "emergency" or _has_emergency_signal(normalized, support_lang):
+        return {"category": "crisis", "subtopic": "crisis", "confidence": 1.0, "dataset_match": "none", "fallback_reason": ""}
+    if positive_subtopic:
+        return {"category": "positive_emotion", "subtopic": positive_subtopic, "confidence": 0.98, "dataset_match": "positive_emotion_keywords", "fallback_reason": ""}
+    if mental_subtopic or intent == "emotional_support" or topic in {"anxiety", "stress", "fatigue"}:
+        return {"category": "mental_emotional", "subtopic": mental_subtopic or topic or "general", "confidence": 0.96 if mental_subtopic else 0.82, "dataset_match": "mental_health_keywords" if mental_subtopic else "intent_or_topic", "fallback_reason": ""}
+    if physical_signal:
+        return {"category": "physical_symptom", "subtopic": topic or "physical_discomfort", "confidence": 0.9, "dataset_match": "physical_signal", "fallback_reason": ""}
+    if casual_kind or intent in {"greeting", "casual_checkin", "gratitude", "goodbye"}:
+        return {"category": "casual_conversation", "subtopic": casual_kind or intent, "confidence": 0.9, "dataset_match": "casual_pattern", "fallback_reason": ""}
+    return {"category": "ai_fallback", "subtopic": "general", "confidence": 0.4, "dataset_match": "none", "fallback_reason": "no_specific_route_match"}
+
+
+def _build_positive_response(lang, user_text="", session_store=None):
+    support_lang = _support_language(lang, user_text=user_text) or "en"
+    bank = POSITIVE_RESPONSE_DATA.get(support_lang, POSITIVE_RESPONSE_DATA["en"])
+    parts = [
+        _choose_support_line(bank.get("validation", []), session_store=session_store),
+        _choose_support_line(bank.get("reinforcement", []), session_store=session_store),
+        _choose_support_line(bank.get("suggestions", []), session_store=session_store),
+    ]
+    follow_up = _choose_support_line(bank.get("follow_ups", []), session_store=session_store)
+    if follow_up:
+        parts.append(follow_up)
+    return [part for part in parts if part]
+
+
+def _build_mental_health_response(lang, subtopic="general", user_text="", session_store=None):
+    support_lang = _support_language(lang, user_text=user_text) or "en"
+    bank = MENTAL_HEALTH_RESPONSE_DATA.get(support_lang, MENTAL_HEALTH_RESPONSE_DATA["en"])
+    effects = bank.get("effects", {})
+    follow_ups = bank.get("follow_ups", {})
+    parts = [
+        _choose_support_line(bank.get("validation", []), session_store=session_store),
+        effects.get(subtopic) or effects.get("general", ""),
+        _choose_support_line(bank.get("suggestions", []), session_store=session_store),
+        follow_ups.get(subtopic) or follow_ups.get("general", ""),
+    ]
+    return [part for part in parts if part]
+
+
+def friendly_fallback_message(lang, user_text=""):
+    support_lang = _support_language(lang, user_text=user_text) or "en"
+    return FRIENDLY_FALLBACKS.get(support_lang, FRIENDLY_FALLBACKS["en"])
+
+
+def _build_generic_physical_response(lang, user_text=""):
+    support_lang = _support_language(lang, user_text=user_text) or "en"
+    bank = GENERIC_PHYSICAL_RESPONSE_DATA.get(support_lang, GENERIC_PHYSICAL_RESPONSE_DATA["en"])
+    return [
+        bank.get("validation", ""),
+        bank.get("causes", ""),
+        bank.get("care", ""),
+        bank.get("medication", ""),
+        bank.get("warning", ""),
+        bank.get("follow_up", ""),
+    ]
+
+
 def _should_include_medication(condition, category, intent, text, entities, support_lang):
     if category in MILD_MEDICATION_CATEGORIES:
         return True, f"category:{category}"
@@ -1011,6 +1256,70 @@ def _response_phrase_fingerprints(response):
 
 
 def _build_response(intent, topic, lang, repeated=False, previous_response="", sentiment="neutral", session_store=None, user_text=""):
+    route = _classify_response_route(intent, topic, lang, user_text=user_text)
+    LOGGER.info(
+        "[RuleResponder] route_decision category=%s subtopic=%s confidence=%.2f dataset_match=%s fallback_reason=%s intent=%s topic=%s",
+        route.get("category"),
+        route.get("subtopic"),
+        route.get("confidence", 0.0),
+        route.get("dataset_match", "none"),
+        route.get("fallback_reason", "") or "none",
+        intent,
+        topic,
+    )
+
+    if route.get("category") == "positive_emotion":
+        parts = _build_positive_response(lang, user_text=user_text, session_store=session_store)
+        response_text = "\n\n".join(part for part in parts if part) or friendly_fallback_message(lang, user_text=user_text)
+        return response_text, "", {
+            "style": "warm_positive",
+            "blueprint": "positive_support",
+            "mode": "medium",
+            "structure": ["validation", "reinforcement", "suggestions", "follow_up"],
+            "kind": "positive",
+            "category": route.get("category"),
+            "subtopic": route.get("subtopic"),
+            "route_confidence": route.get("confidence"),
+            "dataset_match": route.get("dataset_match"),
+            "fallback_reason": route.get("fallback_reason"),
+        }
+
+    if route.get("category") == "mental_emotional":
+        parts = _build_mental_health_response(
+            lang,
+            subtopic=route.get("subtopic") or "general",
+            user_text=user_text,
+            session_store=session_store,
+        )
+        response_text = "\n\n".join(part for part in parts if part) or friendly_fallback_message(lang, user_text=user_text)
+        return response_text, "", {
+            "style": "empathetic_mental_health",
+            "blueprint": "mental_health_support",
+            "mode": "medium",
+            "structure": ["validation", "effects", "suggestions", "follow_up"],
+            "kind": "mental_health",
+            "category": route.get("category"),
+            "subtopic": route.get("subtopic"),
+            "route_confidence": route.get("confidence"),
+            "dataset_match": route.get("dataset_match"),
+            "fallback_reason": route.get("fallback_reason"),
+        }
+
+    if route.get("category") == "ai_fallback":
+        response_text = friendly_fallback_message(lang, user_text=user_text)
+        return response_text, "", {
+            "style": "friendly_fallback",
+            "blueprint": "safe_fallback",
+            "mode": "short",
+            "structure": ["fallback"],
+            "kind": "fallback",
+            "category": route.get("category"),
+            "subtopic": route.get("subtopic"),
+            "route_confidence": route.get("confidence"),
+            "dataset_match": route.get("dataset_match"),
+            "fallback_reason": route.get("fallback_reason"),
+        }
+
     language_data = RULE_RESPONSE_DATA.get(lang, RULE_RESPONSE_DATA["en"])
     intent_data = language_data.get(intent) or language_data.get("general_query") or {}
     topic_value = _topic_label(lang, topic)
@@ -1036,6 +1345,11 @@ def _build_response(intent, topic, lang, repeated=False, previous_response="", s
             "mode": casual_payload.get("mode", "short"),
             "structure": ["casual"] + (["follow_up"] if len(casual_payload.get("parts", [])) > 1 else []),
             "kind": "casual",
+            "category": route.get("category"),
+            "subtopic": route.get("subtopic"),
+            "route_confidence": route.get("confidence"),
+            "dataset_match": route.get("dataset_match"),
+            "fallback_reason": route.get("fallback_reason"),
         }
 
     support_payload = _build_support_dataset_response(
@@ -1060,6 +1374,22 @@ def _build_response(intent, topic, lang, repeated=False, previous_response="", s
             user_text=user_text,
         )
 
+    if route.get("category") == "physical_symptom" and not support_payload and not symptom_payload:
+        parts = _build_generic_physical_response(lang, user_text=user_text)
+        response_text = "\n\n".join(part for part in parts if part)
+        return response_text, "", {
+            "style": "grounded_physical",
+            "blueprint": "generic_physical_support",
+            "mode": "medium",
+            "structure": ["validation", "causes", "care", "medication", "warning", "follow_up"],
+            "kind": "physical",
+            "category": route.get("category"),
+            "subtopic": route.get("subtopic"),
+            "route_confidence": route.get("confidence"),
+            "dataset_match": route.get("dataset_match"),
+            "fallback_reason": route.get("fallback_reason"),
+        }
+
     if support_payload:
         parts = support_payload.get("parts", [])
         response_text = "\n\n".join(part for part in parts if part)
@@ -1078,6 +1408,11 @@ def _build_response(intent, topic, lang, repeated=False, previous_response="", s
             "mode": support_payload.get("mode", "medium"),
             "structure": support_payload.get("structure_order", []),
             "kind": support_payload.get("kind", "support"),
+            "category": route.get("category"),
+            "subtopic": support_payload.get("subtopic") or route.get("subtopic"),
+            "route_confidence": route.get("confidence"),
+            "dataset_match": support_payload.get("subtopic") or route.get("dataset_match"),
+            "fallback_reason": route.get("fallback_reason"),
         }
 
     if symptom_payload:
@@ -1191,6 +1526,11 @@ def _build_response(intent, topic, lang, repeated=False, previous_response="", s
         "mode": mode,
         "structure": structure,
         "kind": "legacy",
+        "category": route.get("category"),
+        "subtopic": route.get("subtopic"),
+        "route_confidence": route.get("confidence"),
+        "dataset_match": route.get("dataset_match"),
+        "fallback_reason": route.get("fallback_reason"),
     }
 
 
@@ -1248,6 +1588,8 @@ def generate_response(intent, topic, sentiment, session, text=""):
         "last_sentiment": sentiment,
         "last_language": lang,
         "last_symptom_text": _compact_text(text),
+        "last_category": response_meta.get("category"),
+        "last_subtopic": response_meta.get("subtopic"),
         "recent_prefixes": [item for item in recent_prefixes[-4:] if item],
         "recent_styles": [item for item in recent_styles[-RECENT_STYLE_LIMIT:] if item],
         "recent_blueprints": [item for item in recent_blueprints[-RECENT_BLUEPRINT_LIMIT:] if item],
