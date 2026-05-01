@@ -57,8 +57,17 @@ from rule_responder import (
 from services.auth import consume_auth_attempt, get_or_create_csrf_token, reset_auth_attempts, validate_csrf
 from services.ai_handler import (
     ai_fallback_reason,
+    detect_casual_interruption,
+    detect_emotional_continuation,
+    detect_follow_up_query,
+    detect_medication_follow_up,
+    detect_resume_topic_request,
     generate_hybrid_response,
+    get_active_conversation_context,
+    get_last_non_casual_context,
+    get_paused_topic,
     is_conversational_query,
+    push_paused_topic,
     repeated_intent_count,
     repeated_topic_count,
     should_use_ai_fallback,
@@ -673,6 +682,28 @@ CRISIS_ROUTE_KEYWORDS = [
 CASUAL_ROUTE_KEYWORDS = [
     "hello", "hi", "hey", "how are you", "what's up", "whats up",
 ]
+EMOTIONAL_SUBTOPIC_BY_KEYWORD = {
+    "sad": "sadness",
+    "unhappy": "sadness",
+    "low": "sadness",
+    "down": "sadness",
+    "depression": "depression",
+    "depressed": "depression",
+    "hopeless": "hopelessness",
+    "empty": "depression",
+    "numb": "depression",
+    "heartbreak": "heartbreak",
+    "anxious": "anxiety",
+    "anxiety": "anxiety",
+    "panic": "anxiety",
+    "overthinking": "overthinking",
+    "stressed": "stress",
+    "stress": "stress",
+    "emotionally exhausted": "emotional_exhaustion",
+    "emotional exhaustion": "emotional_exhaustion",
+    "lonely": "loneliness",
+    "alone": "loneliness",
+}
 
 EMOTIONAL_INTENT_PRIORITY = {
     "emergency": 1,
@@ -722,11 +753,34 @@ def detect_positive_emotion_keywords(text):
     return [item for item in POSITIVE_EMOTION_KEYWORDS if _kw_match(item, text_lower)]
 
 
+def detect_emotional_subtopic(text, emotional_matches=None):
+    text_lower = text.lower()
+    for item in emotional_matches or []:
+        if item in EMOTIONAL_SUBTOPIC_BY_KEYWORD:
+            return EMOTIONAL_SUBTOPIC_BY_KEYWORD[item]
+    for keyword, subtopic in EMOTIONAL_SUBTOPIC_BY_KEYWORD.items():
+        if _kw_match(keyword, text_lower):
+            return subtopic
+    return ""
+
+
+def _merge_entity_maps(primary, secondary):
+    merged = {}
+    for source in [primary or {}, secondary or {}]:
+        for key, values in source.items():
+            bucket = merged.setdefault(key, [])
+            for value in values or []:
+                if value not in bucket:
+                    bucket.append(value)
+    return merged
+
+
 def detect_priority_route(text, lang, keyword_match=None):
     keyword_match = keyword_match or {"matched": False, "matched_keywords": [], "intent": "general_query"}
     text_lower = text.lower()
     emotional_matches = detect_emotional_keywords(text)
     positive_matches = detect_positive_emotion_keywords(text)
+    emotional_subtopic = detect_emotional_subtopic(text, emotional_matches)
     effective_lang = "hinglish" if lang == "hi" and prefers_hinglish(text) else lang
     detected_topic = detect_topic(text, lang)
     health_subtopic = detect_health_subtopic(text, effective_lang)
@@ -754,6 +808,7 @@ def detect_priority_route(text, lang, keyword_match=None):
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
             "category": "crisis",
+            "subtopic": "crisis",
             "confidence": 1.0,
             "dataset_match": "crisis_keywords",
             "fallback_reason": "",
@@ -769,6 +824,7 @@ def detect_priority_route(text, lang, keyword_match=None):
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
             "category": "positive_emotion",
+            "subtopic": positive_matches[0],
             "confidence": 0.98,
             "dataset_match": "positive_emotion_keywords",
             "fallback_reason": "",
@@ -784,6 +840,7 @@ def detect_priority_route(text, lang, keyword_match=None):
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
             "category": "mental_emotional",
+            "subtopic": emotional_subtopic or "general",
             "confidence": 0.96,
             "dataset_match": "mental_health_keywords",
             "fallback_reason": "",
@@ -799,6 +856,7 @@ def detect_priority_route(text, lang, keyword_match=None):
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
             "category": "physical_symptom",
+            "subtopic": health_subtopic.get("name", "physical_discomfort"),
             "confidence": 0.92,
             "dataset_match": health_subtopic.get("name", "disease"),
             "fallback_reason": "",
@@ -814,6 +872,7 @@ def detect_priority_route(text, lang, keyword_match=None):
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
             "category": "physical_symptom",
+            "subtopic": (health_subtopic or {}).get("name") or (physical_conditions[0] if physical_conditions else detected_topic or "physical_discomfort"),
             "confidence": 0.9,
             "dataset_match": (health_subtopic or {}).get("name") or ",".join(physical_conditions[:2]) or "physical_signal",
             "fallback_reason": "",
@@ -829,6 +888,7 @@ def detect_priority_route(text, lang, keyword_match=None):
             "emotional_matches": emotional_matches,
             "entities": extracted_entities,
             "category": "casual_conversation",
+            "subtopic": "casual_checkin",
             "confidence": 0.88,
             "dataset_match": "casual_intent",
             "fallback_reason": "",
@@ -843,6 +903,7 @@ def detect_priority_route(text, lang, keyword_match=None):
         "emotional_matches": emotional_matches,
         "entities": extracted_entities,
         "category": "ai_fallback",
+        "subtopic": "general",
         "confidence": 0.4,
         "dataset_match": "none",
         "fallback_reason": "no_specific_route_match",
@@ -967,6 +1028,7 @@ def detect_physical_conditions(text, lang):
             "stomach_issue": ["pet dard", "pet me dard", "ulti", "dast", "loose motion", "stomach pain"],
             "dizziness": ["chakkar", "sar ghoom", "chakkar aa raha", "dizzy"],
             "fatigue": ["kamzori", "kamjori", "thaka", "thaki", "weak", "weakness", "thak gya"],
+            "dehydration": ["dehydration", "paani ki kami", "dry mouth", "kam paani"],
         }
     else:
         condition_keywords = {
@@ -983,6 +1045,7 @@ def detect_physical_conditions(text, lang):
             "stomach_issue": ["stomach pain", "nausea", "vomiting", "diarrhea", "loose motion", "cramps"],
             "dizziness": ["dizzy", "dizziness", "lightheaded", "faint"],
             "fatigue": ["fatigue", "weak", "weakness", "drained", "no energy"],
+            "dehydration": ["dehydration", "dehydrated", "dry mouth", "low fluids", "not drinking enough"],
         }
 
     matches = []
@@ -1844,6 +1907,159 @@ def build_response(intent, sentiment, topic, lang, text=""):
         return general_en(text)
 
 
+def resolve_turn_analysis(user_message, lang, session_store):
+    keyword_match = match_keyword_intent(user_message, lang)
+    sentiment, sentiment_confidence = detect_sentiment_ml(user_message, lang)
+    intent, intent_confidence = detect_intent_ml(user_message, lang)
+    topic = detect_topic(user_message, lang)
+    priority_route = detect_priority_route(user_message, lang, keyword_match)
+    detected_subtopic = priority_route.get("health_subtopic")
+    route_subtopic = priority_route.get("subtopic") or (detected_subtopic["name"] if detected_subtopic else None)
+    resolved_intent = priority_route.get("intent") or (keyword_match["intent"] if keyword_match.get("matched") else intent)
+    detected_category = priority_route.get("category", "ai_fallback")
+    matched_keywords = priority_route.get("matched_keywords") or keyword_match.get("matched_keywords", [])
+    extracted_entities = priority_route.get("entities") or {}
+    previous_context = get_active_conversation_context(session_store)
+    resumable_context = get_last_non_casual_context(session_store)
+    paused_context = get_paused_topic(session_store)
+    previous_intent = previous_context.get("intent") if previous_context else None
+    follow_up_detected = detect_follow_up_query(user_message)
+    medication_follow_up = detect_medication_follow_up(user_message)
+    emotional_continuation = detect_emotional_continuation(user_message)
+    casual_interruption = detect_casual_interruption(user_message)
+    resume_requested = detect_resume_topic_request(user_message)
+    context_applied = False
+    context_reason = ""
+
+    if casual_interruption:
+        if resumable_context and resumable_context.get("category") in {"physical_symptom", "mental_emotional", "positive_emotion"}:
+            push_paused_topic(session_store, resumable_context)
+        if detected_category == "ai_fallback":
+            detected_category = "casual_conversation"
+            resolved_intent = "casual_checkin"
+            topic = "general"
+            route_subtopic = "casual_checkin"
+        entity_reasoning = summarize_entity_reasoning(extracted_entities)
+        return {
+            "keyword_match": keyword_match,
+            "sentiment": sentiment,
+            "sentiment_confidence": sentiment_confidence,
+            "intent": intent,
+            "intent_confidence": intent_confidence,
+            "topic": topic,
+            "priority_route": priority_route,
+            "detected_subtopic": detected_subtopic,
+            "resolved_intent": resolved_intent,
+            "detected_category": detected_category,
+            "route_subtopic": route_subtopic,
+            "matched_keywords": matched_keywords,
+            "extracted_entities": extracted_entities,
+            "entity_reasoning": entity_reasoning,
+            "previous_context": previous_context,
+            "previous_intent": previous_intent,
+            "follow_up_detected": False,
+            "medication_follow_up": False,
+            "emotional_continuation": False,
+            "casual_interruption": True,
+            "resume_requested": False,
+            "context_applied": False,
+            "context_reason": "casual_interruption",
+        }
+
+    if resume_requested and paused_context:
+        previous_context = paused_context
+        previous_intent = paused_context.get("intent")
+        follow_up_detected = True
+        context_applied = True
+        context_reason = "resume_paused_topic"
+        if paused_context.get("category") == "physical_symptom":
+            resolved_intent = "symptom_report"
+            detected_category = "physical_symptom"
+        elif paused_context.get("category") == "mental_emotional":
+            resolved_intent = "emotional_support"
+            detected_category = "mental_emotional"
+        elif paused_context.get("category") == "positive_emotion":
+            resolved_intent = "general_query"
+            detected_category = "positive_emotion"
+        topic = paused_context.get("topic", topic)
+        route_subtopic = paused_context.get("subtopic") or route_subtopic
+        extracted_entities = _merge_entity_maps(paused_context.get("entities", {}), extracted_entities)
+
+    if previous_context:
+        previous_category = previous_context.get("category", "ai_fallback")
+        previous_topic = previous_context.get("topic", "general")
+        previous_subtopic = previous_context.get("subtopic")
+        if previous_category == "crisis" and (follow_up_detected or len(user_message.split()) <= 12):
+            resolved_intent = "emergency"
+            detected_category = "crisis"
+            topic = previous_topic if previous_topic and previous_topic != "general" else topic
+            route_subtopic = previous_subtopic or route_subtopic or "crisis"
+            context_applied = True
+            context_reason = "crisis_context"
+        elif follow_up_detected and previous_category in {"physical_symptom", "mental_emotional", "casual_conversation", "positive_emotion"}:
+            detected_category = previous_category
+            topic = previous_topic if previous_topic and previous_topic != "general" else topic
+            route_subtopic = previous_subtopic or route_subtopic
+            if previous_category == "physical_symptom":
+                resolved_intent = "solution_request" if medication_follow_up else "symptom_report"
+            elif previous_category == "mental_emotional":
+                resolved_intent = "emotional_support"
+            elif previous_category == "casual_conversation":
+                resolved_intent = "casual_checkin"
+                topic = "general"
+            elif previous_category == "positive_emotion":
+                resolved_intent = "general_query"
+                topic = "general"
+            extracted_entities = _merge_entity_maps(previous_context.get("entities", {}), extracted_entities)
+            matched_keywords = matched_keywords or ([previous_subtopic] if previous_subtopic else [])
+            context_applied = True
+            context_reason = "follow_up_context"
+        elif previous_category == "mental_emotional" and emotional_continuation and detected_category == "ai_fallback":
+            resolved_intent = "emotional_support"
+            detected_category = "mental_emotional"
+            topic = previous_topic if previous_topic and previous_topic != "general" else topic
+            route_subtopic = previous_subtopic or route_subtopic or "general"
+            extracted_entities = _merge_entity_maps(previous_context.get("entities", {}), extracted_entities)
+            context_applied = True
+            context_reason = "emotional_continuation"
+        elif previous_category in {"physical_symptom", "mental_emotional"} and detected_category == "ai_fallback":
+            resolved_intent = previous_context.get("intent", resolved_intent)
+            detected_category = previous_category
+            topic = previous_topic if previous_topic and previous_topic != "general" else topic
+            route_subtopic = previous_subtopic or route_subtopic
+            extracted_entities = _merge_entity_maps(previous_context.get("entities", {}), extracted_entities)
+            matched_keywords = matched_keywords or ([previous_subtopic] if previous_subtopic else [])
+            context_applied = True
+            context_reason = "active_topic_context"
+
+    entity_reasoning = summarize_entity_reasoning(extracted_entities)
+    return {
+        "keyword_match": keyword_match,
+        "sentiment": sentiment,
+        "sentiment_confidence": sentiment_confidence,
+        "intent": intent,
+        "intent_confidence": intent_confidence,
+        "topic": topic,
+        "priority_route": priority_route,
+        "detected_subtopic": detected_subtopic,
+        "resolved_intent": resolved_intent,
+        "detected_category": detected_category,
+        "route_subtopic": route_subtopic,
+        "matched_keywords": matched_keywords,
+        "extracted_entities": extracted_entities,
+        "entity_reasoning": entity_reasoning,
+        "previous_context": previous_context,
+        "previous_intent": previous_intent,
+        "follow_up_detected": follow_up_detected,
+        "medication_follow_up": medication_follow_up,
+        "emotional_continuation": emotional_continuation,
+        "casual_interruption": casual_interruption,
+        "resume_requested": resume_requested,
+        "context_applied": context_applied,
+        "context_reason": context_reason,
+    }
+
+
 def build_response_with_optional_llm(intent, sentiment, topic, lang, text="", keyword_match=None):
     keyword_match = keyword_match or {"matched": False, "intent": intent}
     resolved_intent = intent
@@ -2294,18 +2510,22 @@ def chat():
         )
 
         lang = forced_lang if forced_lang in ("en", "hi") else detect_language(user_message)
-        keyword_match = match_keyword_intent(user_message, lang)
-
-        sentiment, sentiment_confidence = detect_sentiment_ml(user_message, lang)
-        intent, intent_confidence = detect_intent_ml(user_message, lang)
-        topic = detect_topic(user_message, lang)
-        priority_route = detect_priority_route(user_message, lang, keyword_match)
-        detected_subtopic = priority_route.get("health_subtopic")
-        resolved_intent = priority_route.get("intent") or (keyword_match["intent"] if keyword_match.get("matched") else intent)
-        detected_category = priority_route.get("category", "ai_fallback")
-        matched_keywords = priority_route.get("matched_keywords") or keyword_match.get("matched_keywords", [])
-        extracted_entities = priority_route.get("entities") or {}
-        entity_reasoning = summarize_entity_reasoning(extracted_entities)
+        analysis = resolve_turn_analysis(user_message, lang, session)
+        keyword_match = analysis["keyword_match"]
+        sentiment = analysis["sentiment"]
+        sentiment_confidence = analysis["sentiment_confidence"]
+        intent = analysis["intent"]
+        intent_confidence = analysis["intent_confidence"]
+        topic = analysis["topic"]
+        priority_route = analysis["priority_route"]
+        detected_subtopic = analysis["detected_subtopic"]
+        resolved_intent = analysis["resolved_intent"]
+        detected_category = analysis["detected_category"]
+        matched_keywords = analysis["matched_keywords"]
+        extracted_entities = analysis["extracted_entities"]
+        entity_reasoning = analysis["entity_reasoning"]
+        route_subtopic = analysis["route_subtopic"]
+        previous_context = analysis["previous_context"]
         repeat_intent_hits = repeated_intent_count(session, resolved_intent)
         repeat_topic_hits = repeated_topic_count(session, topic)
         ai_reason = ai_fallback_reason(resolved_intent, keyword_match, lang, user_message, session, topic=topic)
@@ -2318,15 +2538,24 @@ def chat():
             sentiment_confidence,
             topic,
         )
+        if analysis["context_applied"]:
+            fallback_used = False
         if ai_reason:
             fallback_used = False
 
         logging.info(
-            "routing_decision category=%s intent=%s topic=%s subtopic=%s intent_confidence=%.4f sentiment_confidence=%.4f matched_keywords=%s entities=%s reasoning=%s override_reason=%s dataset_match=%s ai_reason=%s fallback=%s fallback_reason=%s",
+            "routing_decision category=%s intent=%s previous_intent=%s topic=%s subtopic=%s context_topic=%s follow_up_detected=%s casual_interruption=%s resume_requested=%s context_applied=%s context_reason=%s intent_confidence=%.4f sentiment_confidence=%.4f matched_keywords=%s entities=%s reasoning=%s override_reason=%s dataset_match=%s ai_reason=%s fallback=%s fallback_reason=%s",
             detected_category,
             resolved_intent,
+            analysis["previous_intent"] or "none",
             topic,
-            detected_subtopic["name"] if detected_subtopic else "none",
+            route_subtopic or (detected_subtopic["name"] if detected_subtopic else "none"),
+            previous_context.get("topic", "none") if previous_context else "none",
+            analysis["follow_up_detected"],
+            analysis["casual_interruption"],
+            analysis["resume_requested"],
+            analysis["context_applied"],
+            analysis["context_reason"] or "none",
             intent_confidence,
             sentiment_confidence,
             matched_keywords[:6],
@@ -2367,13 +2596,14 @@ def chat():
             "intent": resolved_intent,
             "topic": topic,
             "category": detected_category,
-            "subtopic": detected_subtopic["name"] if detected_subtopic else None,
+            "subtopic": route_subtopic or (detected_subtopic["name"] if detected_subtopic else None),
             "entities": extracted_entities,
             "entity_reasoning": entity_reasoning,
             "intent_confidence": round(intent_confidence, 4),
             "sentiment_confidence": round(sentiment_confidence, 4),
             "fallback_used": fallback_used,
             "fallback_reason": priority_route.get("fallback_reason") or ("legacy_fallback_rules" if fallback_used else None),
+            "response_source": "context_continuation" if analysis["context_applied"] else ("friendly_fallback" if fallback_used else "standard_pipeline"),
             "ml_used": lang == "en",
             "keyword_match": keyword_match.get("matched", False),
             "matched_keywords": matched_keywords[:6],
@@ -2384,6 +2614,13 @@ def chat():
             "llm_provider": "openrouter",
             "ai_usage": bool(ai_reason),
             "ai_reason": ai_reason or None,
+            "follow_up_detected": analysis["follow_up_detected"],
+            "casual_interruption": analysis["casual_interruption"],
+            "resume_requested": analysis["resume_requested"],
+            "context_applied": analysis["context_applied"],
+            "context_reason": analysis["context_reason"] or None,
+            "previous_intent": analysis["previous_intent"],
+            "context_topic": previous_context.get("topic") if previous_context else None,
             "repeat_intent_hits": repeat_intent_hits,
             "repeat_topic_hits": repeat_topic_hits,
         }

@@ -7,6 +7,7 @@ from ml.openrouter_responder import generate_openrouter_response, openrouter_ena
 SESSION_CHAT_HISTORY_KEY = "chat_history"
 SESSION_MAX_HISTORY = 10
 SESSION_TEXT_LIMIT = 120
+PAUSED_TOPICS_KEY = "paused_topics"
 UNSAFE_AI_MARKERS = [
     "kill yourself",
     "end your life",
@@ -20,7 +21,8 @@ CONVERSATIONAL_QUERY_MARKERS = [
     "tell me a joke", "joke", "make me laugh", "who are you", "what are you",
     "what can you do", "tell me about yourself", "chat with me", "talk to me",
     "say something fun", "say something interesting", "how are you", "what's up",
-    "whats up", "hello there", "hi there"
+    "whats up", "hello", "hi", "hey", "hello there", "hi there", "play a game", "lets talk casually",
+    "let's talk casually", "good morning", "tell me something funny"
 ]
 NON_MEDICAL_QUERY_MARKERS = [
     "movie", "music", "song", "sports", "cricket", "football", "weather",
@@ -30,6 +32,24 @@ MEDICAL_QUERY_MARKERS = [
     "fever", "cough", "cold", "flu", "headache", "migraine", "dizziness",
     "nausea", "stomach", "pain", "malaria", "jaundice", "dengue", "typhoid",
     "stress", "anxiety", "panic", "sad", "sleep", "therapy", "doctor", "symptom",
+]
+FOLLOW_UP_QUERY_MARKERS = [
+    "can you explain more", "explain more", "elaborate", "why", "how", "what do you mean",
+    "tell me more", "how does that happen", "what causes that", "can you elaborate",
+    "could you explain", "more about that", "what about", "and what about",
+    "what medicine helps", "what medication helps", "what can i take", "what should i take",
+]
+MEDICATION_QUERY_MARKERS = [
+    "medicine", "medication", "tablet", "pill", "paracetamol", "ibuprofen",
+    "what helps", "what can i take", "what should i take", "otc",
+]
+EMOTIONAL_CONTINUATION_MARKERS = [
+    "why does it feel", "why does it feel heavy", "why am i feeling", "it feels heavy",
+    "why is it like that", "why is that", "what does that mean",
+]
+RESUME_TOPIC_MARKERS = [
+    "back to", "okay back to", "let's get back to", "lets get back to",
+    "return to", "resume", "continue with",
 ]
 
 
@@ -52,6 +72,8 @@ def get_session_chat_history(session_store):
             "intent": item.get("intent", "general_query"),
             "sentiment": item.get("sentiment", "neutral"),
             "topic": item.get("topic", "general"),
+            "category": item.get("category", "ai_fallback"),
+            "subtopic": item.get("subtopic"),
             "entities": item.get("entities", {}),
         })
     return cleaned
@@ -62,6 +84,81 @@ def get_recent_user_messages(session_store, limit=3):
     return [item.get("user", "") for item in history if item.get("user")][-limit:]
 
 
+def detect_follow_up_query(text):
+    lowered = (text or "").strip().lower()
+    return any(marker in lowered for marker in FOLLOW_UP_QUERY_MARKERS)
+
+
+def detect_medication_follow_up(text):
+    lowered = (text or "").strip().lower()
+    return any(marker in lowered for marker in MEDICATION_QUERY_MARKERS)
+
+
+def detect_emotional_continuation(text):
+    lowered = (text or "").strip().lower()
+    return any(marker in lowered for marker in EMOTIONAL_CONTINUATION_MARKERS)
+
+
+def get_active_conversation_context(session_store):
+    history = get_session_chat_history(session_store)
+    for item in reversed(history):
+        if item.get("category") == "crisis":
+            return item
+        if item.get("topic") != "general" or item.get("category") in {
+            "physical_symptom", "mental_emotional", "positive_emotion", "casual_conversation"
+        }:
+            return item
+    return history[-1] if history else {}
+
+
+def get_last_non_casual_context(session_store):
+    history = get_session_chat_history(session_store)
+    for item in reversed(history):
+        if item.get("category") in {"physical_symptom", "mental_emotional", "positive_emotion", "crisis"}:
+            return item
+    return {}
+
+
+def detect_resume_topic_request(text):
+    lowered = (text or "").strip().lower()
+    return any(marker in lowered for marker in RESUME_TOPIC_MARKERS)
+
+
+def detect_casual_interruption(text):
+    lowered = (text or "").strip().lower()
+    return any(marker in lowered for marker in CONVERSATIONAL_QUERY_MARKERS)
+
+
+def push_paused_topic(session_store, context):
+    if not context:
+        return
+    paused = session_store.get(PAUSED_TOPICS_KEY, [])
+    if not isinstance(paused, list):
+        paused = []
+    compact = {
+        "intent": context.get("intent", "general_query"),
+        "topic": context.get("topic", "general"),
+        "category": context.get("category", "ai_fallback"),
+        "subtopic": context.get("subtopic"),
+        "entities": context.get("entities", {}),
+    }
+    paused = [item for item in paused if not (
+        item.get("topic") == compact["topic"]
+        and item.get("category") == compact["category"]
+        and item.get("subtopic") == compact["subtopic"]
+    )]
+    paused.append(compact)
+    session_store[PAUSED_TOPICS_KEY] = paused[-5:]
+    session_store.modified = True
+
+
+def get_paused_topic(session_store):
+    paused = session_store.get(PAUSED_TOPICS_KEY, [])
+    if not isinstance(paused, list) or not paused:
+        return {}
+    return paused[-1]
+
+
 def update_session_chat_history(session_store, user_message, bot_response, meta=None):
     history = get_session_chat_history(session_store)
     entry = {
@@ -70,6 +167,8 @@ def update_session_chat_history(session_store, user_message, bot_response, meta=
         "intent": (meta or {}).get("intent", "general_query"),
         "sentiment": (meta or {}).get("sentiment", "neutral"),
         "topic": (meta or {}).get("topic", "general"),
+        "category": (meta or {}).get("category", "ai_fallback"),
+        "subtopic": (meta or {}).get("subtopic"),
         "entities": (meta or {}).get("entities", {}),
     }
     if history and history[-1] == entry:

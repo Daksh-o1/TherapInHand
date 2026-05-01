@@ -190,6 +190,31 @@ FRIENDLY_FALLBACKS = {
     "en": "I'm here with you. Tell me a little more about what's going on.",
     "hinglish": "Main yahin hoon. Thoda aur batao ki kya chal raha hai.",
 }
+FOLLOW_UP_QUERY_MARKERS = [
+    "can you explain more", "explain more", "elaborate", "why", "how", "what do you mean",
+    "tell me more", "how does that happen", "what causes that", "can you elaborate",
+    "could you explain", "more about that", "what about", "and what about",
+]
+MEDICATION_QUERY_MARKERS = [
+    "medicine", "medication", "tablet", "pill", "paracetamol", "ibuprofen",
+    "what helps", "what can i take", "what should i take", "otc",
+]
+SPECIAL_FOLLOW_UP_OVERRIDES = {
+    "dehydration": {
+        "urine": {
+            "en": [
+                "Usually pale yellow urine suggests you are better hydrated, while darker yellow or amber urine can happen when the body is low on fluids.",
+                "It is only a rough clue, though. First-morning urine can look darker, and vitamins can change the color too.",
+                "What matters more is the overall pattern with thirst, dry mouth, dizziness, low urine frequency, and whether fluids are helping you feel steadier.",
+            ],
+            "hinglish": [
+                "Usually pale yellow urine better hydration ka rough sign hota hai, jabki dark yellow ya amber color low fluids me dikh sakta hai.",
+                "Ye perfect test nahi hota. Subah ka first urine dark ho sakta hai, aur vitamins bhi color change kar sakte hain.",
+                "Pattern zyada matter karta hai: pyaas, dry mouth, dizziness, urine kam aana, aur fluids se body steady feel ho rahi hai ya nahi.",
+            ],
+        },
+    },
+}
 GENERIC_PHYSICAL_RESPONSE_DATA = {
     "en": {
         "validation": "That sounds uncomfortable.",
@@ -301,14 +326,18 @@ CASUAL_PATTERN_BANK = {
     },
     "general_chat": {
         "en": [
-            "Sure, we can keep it casual for a bit.",
-            "Yeah, we can talk normally too.",
-            "Absolutely. It does not always have to be a heavy check-in.",
+            "Of course. What's up?",
+            "I'm listening.",
+            "How's your day going?",
+            "Tell me what's on your mind.",
+            "We can keep this casual if you want.",
         ],
         "hinglish": [
             "Haan, casual bhi baat kar sakte hain.",
-            "Bilkul, har message serious health mode me hona zaroori nahi hai.",
-            "Haan yaar, normal chat bhi theek hai.",
+            "Main sun raha hoon, bolo.",
+            "Tumhare dimaag me kya chal raha hai?",
+            "Aaj ka din kaisa ja raha hai?",
+            "Bilkul, normal chat bhi theek hai.",
         ],
     },
 }
@@ -464,7 +493,7 @@ def _filter_sections_for_blueprint(blueprint, include_medication=False, include_
 
 def _casual_query_kind(text):
     lowered = _normalize_text(text)
-    if any(marker in lowered for marker in ["tell me a joke", "make me laugh", "say something funny", "joke"]):
+    if any(marker in lowered for marker in ["tell me a joke", "make me laugh", "say something funny", "tell me something funny", "joke"]):
         return "joke"
     if any(marker in lowered for marker in ["who are you", "what are you", "what can you do", "tell me about yourself"]):
         return "identity"
@@ -790,6 +819,120 @@ def _build_generic_physical_response(lang, user_text=""):
         bank.get("warning", ""),
         bank.get("follow_up", ""),
     ]
+
+
+def _is_follow_up_query(text):
+    normalized = _normalize_text(text)
+    return any(marker in normalized for marker in FOLLOW_UP_QUERY_MARKERS)
+
+
+def _is_medication_query(text):
+    normalized = _normalize_text(text)
+    return any(marker in normalized for marker in MEDICATION_QUERY_MARKERS)
+
+
+def _active_chat_context(session_store=None):
+    history = session_store.get(CHAT_HISTORY_KEY, []) if session_store else []
+    for item in reversed(history):
+        if isinstance(item, dict) and (item.get("category") or item.get("topic")):
+            return item
+    return {}
+
+
+def _context_follow_up_override(subtopic, user_text, support_lang):
+    overrides = SPECIAL_FOLLOW_UP_OVERRIDES.get(subtopic, {})
+    normalized = _normalize_text(user_text)
+    for keyword, localized in overrides.items():
+        if keyword in normalized:
+            return localized.get(support_lang, localized.get("en", []))
+    return []
+
+
+def _context_follow_up_parts(condition_data, follow_up_kind, session_store=None, previous_response="", previous_bot=""):
+    if follow_up_kind == "medication":
+        primary_keys = ["medications", "solutions", "warnings"]
+    else:
+        primary_keys = ["symptom_explanation", "solutions", "warnings"]
+    parts = []
+    used = set()
+    for key in primary_keys:
+        choice = _choose_support_line(
+            condition_data.get(key, []),
+            session_store=session_store,
+            previous_response=previous_response or previous_bot,
+            exclude_lines=used,
+        )
+        if choice:
+            parts.append(choice)
+            used.add(choice)
+        if len(parts) >= 3:
+            break
+    return parts
+
+
+def _build_context_follow_up_response(intent, topic, lang, session_store=None, user_text=""):
+    if not _is_follow_up_query(user_text):
+        return None
+    context = _active_chat_context(session_store)
+    if not context:
+        return None
+
+    support_lang = _support_language(lang, user_text=user_text) or "en"
+    category = context.get("category", "ai_fallback")
+    subtopic = context.get("subtopic") or context.get("topic") or "general"
+    previous_bot = context.get("bot", "")
+    follow_up_kind = "medication" if _is_medication_query(user_text) else "explanation"
+
+    if category == "physical_symptom":
+        dataset = _support_dataset(lang, user_text=user_text)
+        dataset_category = SUPPORT_CATEGORY_BY_CONDITION.get(subtopic)
+        condition_data = dataset.get(dataset_category, {}).get(subtopic, {}) if dataset and dataset_category else {}
+        if condition_data:
+            override_parts = _context_follow_up_override(subtopic, user_text, support_lang)
+            if override_parts:
+                parts = override_parts[:3]
+            else:
+                parts = _context_follow_up_parts(
+                    condition_data,
+                    follow_up_kind,
+                    session_store=session_store,
+                    previous_response=previous_bot,
+                    previous_bot=previous_bot,
+                )
+            if parts:
+                return {
+                    "style": "context_follow_up",
+                    "blueprint": "follow_up_continuation",
+                    "mode": "medium",
+                    "structure": ["follow_up_context"],
+                    "kind": "physical_follow_up",
+                    "category": category,
+                    "subtopic": subtopic,
+                    "parts": parts,
+                    "response_source": "context_follow_up",
+                }
+
+    if category == "mental_emotional":
+        parts = _build_mental_health_response(
+            lang,
+            subtopic=subtopic or "general",
+            user_text=user_text,
+            session_store=session_store,
+        )
+        if parts:
+            return {
+                "style": "context_follow_up",
+                "blueprint": "mental_follow_up",
+                "mode": "medium",
+                "structure": ["follow_up_context"],
+                "kind": "mental_follow_up",
+                "category": category,
+                "subtopic": subtopic,
+                "parts": parts[:3],
+                "response_source": "context_follow_up",
+            }
+
+    return None
 
 
 def _should_include_medication(condition, category, intent, text, entities, support_lang):
@@ -1267,6 +1410,35 @@ def _build_response(intent, topic, lang, repeated=False, previous_response="", s
         intent,
         topic,
     )
+
+    context_follow_up = _build_context_follow_up_response(
+        intent=intent,
+        topic=topic,
+        lang=lang,
+        session_store=session_store,
+        user_text=user_text,
+    )
+    if context_follow_up:
+        response_text = "\n\n".join(part for part in context_follow_up.get("parts", []) if part)
+        LOGGER.info(
+            "[RuleResponder] context_follow_up subtopic=%s category=%s source=%s text=%s",
+            context_follow_up.get("subtopic"),
+            context_follow_up.get("category"),
+            context_follow_up.get("response_source"),
+            _compact_text(response_text),
+        )
+        return response_text, "", {
+            "style": context_follow_up.get("style", "context_follow_up"),
+            "blueprint": context_follow_up.get("blueprint", "follow_up_continuation"),
+            "mode": context_follow_up.get("mode", "medium"),
+            "structure": context_follow_up.get("structure", ["follow_up_context"]),
+            "kind": context_follow_up.get("kind", "follow_up"),
+            "category": context_follow_up.get("category"),
+            "subtopic": context_follow_up.get("subtopic"),
+            "route_confidence": 0.99,
+            "dataset_match": context_follow_up.get("subtopic"),
+            "fallback_reason": "",
+        }
 
     if route.get("category") == "positive_emotion":
         parts = _build_positive_response(lang, user_text=user_text, session_store=session_store)
