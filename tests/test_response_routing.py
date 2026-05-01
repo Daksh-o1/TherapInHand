@@ -121,6 +121,15 @@ class ResponseRoutingTests(unittest.TestCase):
         self.assertEqual(second_analysis["resolved_intent"], "solution_request")
         self.assertTrue("paracetamol" in lowered or "ibuprofen" in lowered or "medicine" in lowered)
 
+    def test_direct_medication_request_stays_medical(self):
+        session = FakeSession()
+        analysis, response = run_turn(session, "what medicine should I take for fever?")
+        lowered = response.lower()
+        self.assertEqual(analysis["detected_category"], "physical_symptom")
+        self.assertEqual(analysis["resolved_intent"], "solution_request")
+        self.assertNotIn("i'm here with you", lowered)
+        self.assertTrue("paracetamol" in lowered or "ibuprofen" in lowered or "rest" in lowered or "fluids" in lowered)
+
     def test_casual_interruption_switches_out_of_dehydration(self):
         session = FakeSession()
         _, _ = run_turn(session, "I have dehydration")
@@ -145,6 +154,17 @@ class ResponseRoutingTests(unittest.TestCase):
         self.assertEqual(third_analysis["detected_category"], "physical_symptom")
         self.assertTrue("dehydr" in lowered or "fluid" in lowered or "ors" in lowered)
 
+    def test_all_good_resets_emotional_mode(self):
+        session = FakeSession()
+        _, _ = run_turn(session, "I feel sad")
+        second_analysis, second_response = run_turn(session, "all good")
+        lowered = second_response.lower()
+        self.assertTrue(second_analysis["topic_switch_detected"])
+        self.assertEqual(second_analysis["message_topic"], "unrelated_topic_switch")
+        self.assertFalse(second_analysis["context_applied"])
+        self.assertNotIn("sad", lowered)
+        self.assertNotIn("heavy", lowered)
+
     def test_lonely_then_hello_switches_to_casual(self):
         session = FakeSession()
         _, _ = run_turn(session, "I feel lonely")
@@ -164,6 +184,23 @@ class ResponseRoutingTests(unittest.TestCase):
         self.assertTrue(second_analysis["casual_interruption"])
         self.assertNotIn("i'm here with you", lowered)
         self.assertTrue("joke" in lowered or "funny" in lowered or "stress" in lowered or "bottle" in lowered)
+
+    def test_hello_is_normal_greeting(self):
+        session = FakeSession()
+        analysis, response = run_turn(session, "hi")
+        lowered = response.lower()
+        self.assertEqual(analysis["detected_category"], "casual_conversation")
+        self.assertIn(analysis["message_topic"], {"casual_greeting", "unrelated_topic_switch"})
+        self.assertNotIn("sad", lowered)
+        self.assertNotIn("dehydration", lowered)
+
+    def test_joke_reply_is_not_therapy_style(self):
+        session = FakeSession()
+        analysis, response = run_turn(session, "tell me a joke")
+        lowered = response.lower()
+        self.assertEqual(analysis["detected_category"], "casual_conversation")
+        self.assertTrue("joke" in lowered or "funny" in lowered or "laugh" in lowered or "bottle" in lowered)
+        self.assertNotIn("i'm here with you", lowered)
 
 
 if __name__ == "__main__":

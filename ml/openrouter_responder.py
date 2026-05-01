@@ -15,8 +15,11 @@ _LAST_ERROR = ""
 _LAST_MODEL = ""
 _LAST_STATUS_CODE = None
 _LAST_REQUEST_URL = "https://openrouter.ai/api/v1/chat/completions"
+_LAST_LATENCY_MS = None
+_LAST_FALLBACK_REASON = ""
 LOGGER = logging.getLogger(__name__)
 RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
+URL_OPEN = urllib.request.urlopen
 
 
 def openrouter_enabled() -> bool:
@@ -36,18 +39,23 @@ def _build_messages(user_message: str, analysis: dict) -> list:
     intent = analysis.get("intent", "general_query")
     sentiment = analysis.get("sentiment", "neutral")
     topic = analysis.get("topic", "general")
+    message_topic = analysis.get("message_topic", "general")
+    response_style = analysis.get("response_style", "balanced")
 
     system_prompt = (
-        "You are TherapInHand, a warm, professional wellbeing support chatbot. "
-        "Reply in natural, supportive English. Keep answers concise, grounded, and practical. "
-        "For stress, anxiety, loneliness, low mood, sleep trouble, overwhelm, or burnout, validate the feeling and offer 2 to 4 realistic next steps. "
-        "For physical symptoms, give general self-care guidance and clear red flags for when a doctor is needed. "
+        "You are TherapInHand, a conversational support chatbot. "
+        "Current user message has the highest priority, then topic continuity, then recent context, then older emotional memory. "
+        "Reply in natural English and match the user's current mode instead of forcing therapy tone. "
+        "For jokes, greetings, gratitude, fun chat, or technical questions, answer normally and directly. "
+        "For stress, anxiety, loneliness, low mood, sleep trouble, overwhelm, or burnout, validate briefly and offer 2 to 4 realistic next steps. "
+        "For physical symptoms or medication requests, give safe general self-care or OTC guidance, include hydration or rest when relevant, and name urgent red flags when needed. "
         "Do not diagnose, prescribe, or claim to replace a clinician. "
+        "Do not refuse routine OTC guidance when the user asks what helps a common symptom like fever, headache, or cold. "
         "If the user asks about therapy or professional support, encourage it without pressure. "
         "If there are self-harm or immediate danger cues, prioritize urgent human support."
     )
     context_prompt = (
-        f"Classifier context: intent={intent}; sentiment={sentiment}; topic={topic}. "
+        f"Classifier context: intent={intent}; sentiment={sentiment}; topic={topic}; message_topic={message_topic}; response_style={response_style}. "
         "Use this as context only. Trust the user message if it is clearer than the classifier."
     )
     return [
@@ -57,12 +65,47 @@ def _build_messages(user_message: str, analysis: dict) -> list:
     ]
 
 
+def _extract_text_content(content):
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text" and item.get("text"):
+                parts.append(str(item.get("text")).strip())
+            elif isinstance(item, str):
+                parts.append(item.strip())
+        return "\n".join(part for part in parts if part).strip()
+    return ""
+
+
+def _parse_openrouter_response(data):
+    if not isinstance(data, dict):
+        raise TypeError("response payload was not a JSON object")
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise KeyError("choices")
+    first_choice = choices[0] or {}
+    message = first_choice.get("message") if isinstance(first_choice, dict) else None
+    content = ""
+    if isinstance(message, dict):
+        content = _extract_text_content(message.get("content"))
+    if not content and isinstance(first_choice, dict):
+        content = _extract_text_content(first_choice.get("text"))
+    if not content:
+        raise ValueError("empty_response")
+    return content
+
+
 def generate_openrouter_response(user_message: str, analysis: dict):
-    global _LAST_ERROR, _LAST_MODEL, _LAST_STATUS_CODE
+    global _LAST_ERROR, _LAST_MODEL, _LAST_STATUS_CODE, _LAST_LATENCY_MS, _LAST_FALLBACK_REASON
     _LAST_ERROR = ""
     _LAST_STATUS_CODE = None
+    _LAST_LATENCY_MS = None
+    _LAST_FALLBACK_REASON = ""
 
     if not openrouter_enabled():
+        _LAST_FALLBACK_REASON = "disabled"
         LOGGER.info("[AI] OpenRouter request skipped because integration is disabled.")
         return None
 
@@ -70,6 +113,7 @@ def generate_openrouter_response(user_message: str, analysis: dict):
     api_key = settings["api_key"]
     if not api_key:
         _LAST_ERROR = "OPENROUTER_API_KEY is not set"
+        _LAST_FALLBACK_REASON = "missing_api_key"
         LOGGER.warning("[AI] Error: %s", _LAST_ERROR)
         return None
 
@@ -111,8 +155,10 @@ def generate_openrouter_response(user_message: str, analysis: dict):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=settings["timeout"]) as response:
+            started_at = time.perf_counter()
+            with URL_OPEN(request, timeout=settings["timeout"]) as response:
                 _LAST_STATUS_CODE = getattr(response, "status", None)
+                _LAST_LATENCY_MS = round((time.perf_counter() - started_at) * 1000, 2)
                 LOGGER.info("[AI] Response received: status=%s attempt=%s", _LAST_STATUS_CODE, attempt)
                 body = response.read().decode("utf-8")
                 data = json.loads(body)
@@ -121,6 +167,7 @@ def generate_openrouter_response(user_message: str, analysis: dict):
             _LAST_STATUS_CODE = exc.code
             error_body = exc.read().decode("utf-8", errors="replace")
             _LAST_ERROR = f"OpenRouter HTTP {exc.code}: {error_body[:300]}"
+            _LAST_FALLBACK_REASON = f"http_{exc.code}"
             LOGGER.warning("[AI] Error: %s", _LAST_ERROR)
             if exc.code in {401, 403}:
                 LOGGER.warning("[AI] Invalid auth or access issue while calling OpenRouter.")
@@ -129,16 +176,19 @@ def generate_openrouter_response(user_message: str, analysis: dict):
                 return None
         except urllib.error.URLError as exc:
             _LAST_ERROR = f"OpenRouter URL error: {exc}"
+            _LAST_FALLBACK_REASON = "url_error"
             LOGGER.warning("[AI] Error: %s", _LAST_ERROR)
             if attempt >= attempts:
                 return None
         except socket.timeout as exc:
             _LAST_ERROR = f"OpenRouter timeout after {settings['timeout']}s: {exc}"
+            _LAST_FALLBACK_REASON = "timeout"
             LOGGER.warning("[AI] Error: %s", _LAST_ERROR)
             if attempt >= attempts:
                 return None
         except Exception as exc:
             _LAST_ERROR = f"OpenRouter request failed: {exc}"
+            _LAST_FALLBACK_REASON = "request_exception"
             LOGGER.warning("[AI] Error: %s", _LAST_ERROR)
             return None
 
@@ -147,17 +197,24 @@ def generate_openrouter_response(user_message: str, analysis: dict):
         time.sleep(backoff_seconds)
 
     if data is None:
+        _LAST_FALLBACK_REASON = _LAST_FALLBACK_REASON or "no_data"
         return None
 
     try:
-        content = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
+        content = _parse_openrouter_response(data)
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
         _LAST_ERROR = f"Unexpected OpenRouter response: {exc}"
+        _LAST_FALLBACK_REASON = "malformed_or_empty_response"
         LOGGER.warning("[AI] Error: %s", _LAST_ERROR)
         return None
 
     cleaned = str(content).strip()
-    LOGGER.info("[AI] Response received: content_length=%s", len(cleaned))
+    if not cleaned:
+        _LAST_ERROR = "OpenRouter returned empty content"
+        _LAST_FALLBACK_REASON = "empty_response"
+        LOGGER.warning("[AI] Error: %s", _LAST_ERROR)
+        return None
+    LOGGER.info("[AI] Response received: content_length=%s latency_ms=%s", len(cleaned), _LAST_LATENCY_MS)
     return cleaned or None
 
 
@@ -181,6 +238,8 @@ def openrouter_status() -> dict:
         "model": settings["model"] or _LAST_MODEL or "openrouter/auto",
         "last_error": _LAST_ERROR,
         "last_status_code": _LAST_STATUS_CODE,
+        "last_latency_ms": _LAST_LATENCY_MS,
+        "last_fallback_reason": _LAST_FALLBACK_REASON,
         "request_url": _LAST_REQUEST_URL,
         "timeout": settings["timeout"],
     }

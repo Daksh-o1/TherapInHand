@@ -187,8 +187,70 @@ MENTAL_SUBTOPIC_MAP = {
     "hopelessness": "hopelessness",
 }
 FRIENDLY_FALLBACKS = {
-    "en": "I'm here with you. Tell me a little more about what's going on.",
-    "hinglish": "Main yahin hoon. Thoda aur batao ki kya chal raha hai.",
+    "en": {
+        "default": [
+            "I want to help, but I need a little more detail to answer well.",
+            "I can keep going with this. Give me one more detail and I will be more specific.",
+            "I did not get enough signal from that alone, but we can still sort it out together.",
+        ],
+        "casual": [
+            "We can keep it light. Want a joke, a fun fact, or just normal chat?",
+            "Happy to switch gears. We can chat casually if you want.",
+            "We can go with something lighter here. Pick a topic and I will roll with it.",
+        ],
+        "medical": [
+            "I can give general self-care guidance if you tell me the main symptom, how long it has been going on, and whether anything else came with it.",
+            "If this is physical, tell me the symptom clearly and I can give practical next steps plus warning signs.",
+            "I can help with basic symptom guidance. Tell me what hurts or what is bothering you most.",
+        ],
+        "emotional": [
+            "If this is feeling emotional, tell me whether it is more sadness, anxiety, stress, or overwhelm and I will meet you there.",
+            "If this is a heavy-feeling kind of message, give me one line on what is hitting hardest right now.",
+            "If you want support mode, tell me what feels most intense right now and I will keep it focused.",
+        ],
+        "greeting": [
+            "Hi. What do you want to talk about?",
+            "Hey. What can I help with right now?",
+            "Hello. Want to talk health, feelings, or something casual?",
+        ],
+        "humor": [
+            "I can do jokes too. Say the word and I will give you a quick one.",
+            "Want a light joke or something more absurd?",
+            "I can switch into fun mode. Ask for a joke and I am in.",
+        ],
+    },
+    "hinglish": {
+        "default": [
+            "Main help karna chahta hoon, bas thoda aur clear detail chahiye.",
+            "Ek aur detail do, phir main zyada useful answer de paunga.",
+            "Is line se poora signal nahi mila, but hum isse sort kar sakte hain.",
+        ],
+        "casual": [
+            "Light rakhna hai to casual chat bhi kar sakte hain.",
+            "Topic switch karna hai to bolo, main usi mood me aa jaunga.",
+            "Normal chat bhi bilkul theek hai. Bolo kis topic pe jaana hai.",
+        ],
+        "medical": [
+            "Agar ye body symptom hai to exact symptom, duration, aur saath ke signs batao. Main practical guidance dunga.",
+            "Physical issue hai to clear batao kya problem ho rahi hai, phir main next steps aur warning signs bataunga.",
+            "Basic symptom guidance de sakta hoon. Batao sabse zyada kya bother kar raha hai.",
+        ],
+        "emotional": [
+            "Agar ye emotional side ka hai to bolo sadness, anxiety, stress, ya overwhelm me se kya zyada strong lag raha hai.",
+            "Heavy feel ho raha hai to ek line me batao abhi sabse zyada kya hit kar raha hai.",
+            "Support mode chahiye to main hoon. Bas thoda clear batao kis cheez ka weight zyada hai.",
+        ],
+        "greeting": [
+            "Hi. Bolo kis baat pe help chahiye?",
+            "Hello. Health, emotions, ya casual chat me se kya karna hai?",
+            "Hey. Main ready hoon, bolo.",
+        ],
+        "humor": [
+            "Joke mode bhi on kar sakta hoon. Bolo to ek halka sa suna deta hoon.",
+            "Fun mode chahiye to bolo, ek quick joke deta hoon.",
+            "Humor bhi kar lenge. Bas bolo joke chahiye.",
+        ],
+    },
 }
 FOLLOW_UP_QUERY_MARKERS = [
     "can you explain more", "explain more", "elaborate", "why", "how", "what do you mean",
@@ -805,7 +867,21 @@ def _build_mental_health_response(lang, subtopic="general", user_text="", sessio
 
 def friendly_fallback_message(lang, user_text=""):
     support_lang = _support_language(lang, user_text=user_text) or "en"
-    return FRIENDLY_FALLBACKS.get(support_lang, FRIENDLY_FALLBACKS["en"])
+    bank = FRIENDLY_FALLBACKS.get(support_lang, FRIENDLY_FALLBACKS["en"])
+    lowered = _normalize_text(user_text)
+    if any(marker in lowered for marker in ["hi", "hello", "hey", "good morning"]):
+        key = "greeting"
+    elif any(marker in lowered for marker in ["joke", "funny", "laugh"]):
+        key = "humor"
+    elif any(marker in lowered for marker in ["sad", "anxious", "anxiety", "lonely", "hopeless", "panic", "overwhelmed"]):
+        key = "emotional"
+    elif any(marker in lowered for marker in ["fever", "cold", "cough", "headache", "pain", "medicine", "symptom", "dizziness"]):
+        key = "medical"
+    elif any(marker in lowered for marker in ["chat", "casual", "movie", "music", "sports", "python", "coding"]):
+        key = "casual"
+    else:
+        key = "default"
+    return _choose(bank.get(key, []) or bank.get("default", []))
 
 
 def _build_generic_physical_response(lang, user_text=""):
@@ -1136,6 +1212,14 @@ def _build_support_dataset_response(intent, topic, lang, repeated=False, previou
         parts = [selected["follow_ups"]] + parts[:2]
     elif style == "supportive_friend" and selected.get("friendly_response") and selected["friendly_response"] not in parts[:1]:
         parts = [selected["friendly_response"]] + [part for part in parts if part != selected["friendly_response"]]
+
+    if intent == "solution_request":
+        if selected.get("solutions") and selected["solutions"] not in parts:
+            parts.insert(0, selected["solutions"])
+        if include_medication and selected.get("medications") and selected["medications"] not in parts:
+            parts.append(selected["medications"])
+        if include_warning and selected.get("warnings") and selected["warnings"] not in parts:
+            parts.append(selected["warnings"])
 
     reasoning = _context_reasoning(entities)
     skipped_sections = [

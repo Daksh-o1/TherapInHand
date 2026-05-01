@@ -8,6 +8,7 @@ SESSION_CHAT_HISTORY_KEY = "chat_history"
 SESSION_MAX_HISTORY = 10
 SESSION_TEXT_LIMIT = 120
 PAUSED_TOPICS_KEY = "paused_topics"
+CONVERSATION_STATE_KEY = "conversation_state"
 UNSAFE_AI_MARKERS = [
     "kill yourself",
     "end your life",
@@ -51,6 +52,33 @@ RESUME_TOPIC_MARKERS = [
     "back to", "okay back to", "let's get back to", "lets get back to",
     "return to", "resume", "continue with",
 ]
+TOPIC_SWITCH_MARKERS = [
+    "anyways", "anyway", "leave that", "leave it", "forget that", "new topic",
+    "change topic", "switch topic", "all good", "all okay", "ok cool", "okay cool",
+    "we're good", "we are good", "never mind", "nvm", "hi", "hello", "hey",
+]
+GREETING_MARKERS = ["hi", "hello", "hey", "good morning", "good evening"]
+GRATITUDE_MARKERS = ["thanks", "thank you", "appreciate it", "thx"]
+GOODBYE_MARKERS = ["bye", "goodbye", "see you", "take care", "talk later"]
+JOKE_MARKERS = ["tell me a joke", "joke", "make me laugh", "funny", "tell me something funny"]
+TECHNICAL_QUERY_MARKERS = [
+    "python", "javascript", "coding", "code", "bug", "api", "flask", "sql",
+    "database", "technical", "programming", "regex",
+]
+EMOTIONAL_TRIGGER_MARKERS = [
+    "sad", "anxious", "anxiety", "panic", "depressed", "depression", "lonely",
+    "hopeless", "grief", "grieving", "overwhelmed", "overthinking",
+    "self harm", "self-harm", "suicidal", "want to die", "heartbroken",
+]
+
+
+def _normalize(text):
+    return " ".join(str(text or "").strip().lower().split())
+
+
+def _contains_any(text, markers):
+    lowered = _normalize(text)
+    return any(marker in lowered for marker in markers)
 
 
 def _trim_text(text, limit=SESSION_TEXT_LIMIT):
@@ -84,18 +112,86 @@ def get_recent_user_messages(session_store, limit=3):
     return [item.get("user", "") for item in history if item.get("user")][-limit:]
 
 
+def detect_topic_switch(text):
+    lowered = _normalize(text)
+    if any(lowered == marker or lowered.startswith(f"{marker} ") for marker in TOPIC_SWITCH_MARKERS):
+        return True
+    if lowered.startswith("what about "):
+        suffix = lowered.split("what about ", 1)[1].strip()
+        if suffix and any(marker in suffix for marker in NON_MEDICAL_QUERY_MARKERS + TECHNICAL_QUERY_MARKERS + JOKE_MARKERS):
+            return True
+    return False
+
+
+def classify_message_topic(text):
+    lowered = _normalize(text)
+    if not lowered:
+        return "follow_up_question"
+    if detect_topic_switch(text):
+        return "unrelated_topic_switch"
+    if any(lowered == marker or lowered.startswith(f"{marker} ") for marker in GREETING_MARKERS):
+        return "casual_greeting"
+    if _contains_any(lowered, GOODBYE_MARKERS):
+        return "goodbye"
+    if _contains_any(lowered, GRATITUDE_MARKERS):
+        return "gratitude"
+    if _contains_any(lowered, JOKE_MARKERS):
+        return "joke_fun"
+    if detect_medication_follow_up(text):
+        return "medication_request"
+    if _contains_any(lowered, TECHNICAL_QUERY_MARKERS):
+        return "technical_question"
+    if _contains_any(lowered, EMOTIONAL_TRIGGER_MARKERS):
+        return "emotional_support"
+    if detect_follow_up_query(text):
+        return "follow_up_question"
+    if _contains_any(lowered, MEDICAL_QUERY_MARKERS):
+        return "medical_symptom"
+    if _contains_any(lowered, CONVERSATIONAL_QUERY_MARKERS):
+        return "casual_greeting"
+    return "unrelated_topic_switch"
+
+
+def should_reset_context(message_topic, previous_context=None, current_category="", follow_up_detected=False, resume_requested=False):
+    if resume_requested:
+        return False, ""
+    if message_topic == "unrelated_topic_switch":
+        return True, "explicit_topic_switch"
+    if not previous_context:
+        return False, ""
+    previous_category = previous_context.get("category", "ai_fallback")
+    if follow_up_detected and message_topic not in {"casual_greeting", "joke_fun", "technical_question"}:
+        return False, ""
+    if message_topic in {"casual_greeting", "gratitude", "goodbye", "joke_fun", "technical_question"}:
+        if previous_category in {"physical_symptom", "mental_emotional", "positive_emotion", "crisis"}:
+            return True, f"switch_to_{message_topic}"
+    if current_category == "casual_conversation" and previous_category in {"physical_symptom", "mental_emotional", "positive_emotion"}:
+        return True, "switch_to_casual"
+    if current_category == "physical_symptom" and previous_category == "mental_emotional":
+        return True, "switch_to_medical"
+    if current_category == "mental_emotional" and previous_category == "physical_symptom":
+        return True, "switch_to_emotional"
+    return False, ""
+
+
 def detect_follow_up_query(text):
-    lowered = (text or "").strip().lower()
+    lowered = _normalize(text)
+    if detect_topic_switch(text):
+        return False
+    if "what about" in lowered:
+        suffix = lowered.split("what about", 1)[1].strip()
+        if suffix and any(marker in suffix for marker in NON_MEDICAL_QUERY_MARKERS + TECHNICAL_QUERY_MARKERS):
+            return False
     return any(marker in lowered for marker in FOLLOW_UP_QUERY_MARKERS)
 
 
 def detect_medication_follow_up(text):
-    lowered = (text or "").strip().lower()
+    lowered = _normalize(text)
     return any(marker in lowered for marker in MEDICATION_QUERY_MARKERS)
 
 
 def detect_emotional_continuation(text):
-    lowered = (text or "").strip().lower()
+    lowered = _normalize(text)
     return any(marker in lowered for marker in EMOTIONAL_CONTINUATION_MARKERS)
 
 
@@ -120,12 +216,12 @@ def get_last_non_casual_context(session_store):
 
 
 def detect_resume_topic_request(text):
-    lowered = (text or "").strip().lower()
+    lowered = _normalize(text)
     return any(marker in lowered for marker in RESUME_TOPIC_MARKERS)
 
 
 def detect_casual_interruption(text):
-    lowered = (text or "").strip().lower()
+    lowered = _normalize(text)
     return any(marker in lowered for marker in CONVERSATIONAL_QUERY_MARKERS)
 
 
@@ -159,6 +255,38 @@ def get_paused_topic(session_store):
     return paused[-1]
 
 
+def get_conversation_state(session_store):
+    state = session_store.get(CONVERSATION_STATE_KEY, {})
+    return state if isinstance(state, dict) else {}
+
+
+def update_conversation_state(session_store, meta=None):
+    meta = meta or {}
+    category = meta.get("category", "ai_fallback")
+    next_state = {
+        "recent_topic": meta.get("topic", "general") if category not in {"casual_conversation", "ai_fallback"} else "general",
+        "last_intent": meta.get("intent", "general_query"),
+        "last_message_topic": meta.get("message_topic"),
+        "emotional_mode": category == "mental_emotional",
+        "last_symptom_category": meta.get("subtopic") if category == "physical_symptom" else None,
+        "topic_switch_detected": bool(meta.get("topic_switch_detected")),
+    }
+    if next_state["topic_switch_detected"]:
+        next_state["emotional_mode"] = False
+        next_state["last_symptom_category"] = None
+    session_store[CONVERSATION_STATE_KEY] = next_state
+    session_store.modified = True
+    LOGGER.info(
+        "[ConversationState] recent_topic=%s last_intent=%s emotional_mode=%s last_symptom_category=%s topic_switch=%s message_topic=%s",
+        next_state.get("recent_topic"),
+        next_state.get("last_intent"),
+        next_state.get("emotional_mode"),
+        next_state.get("last_symptom_category"),
+        next_state.get("topic_switch_detected"),
+        next_state.get("last_message_topic") or "unknown",
+    )
+
+
 def update_session_chat_history(session_store, user_message, bot_response, meta=None):
     history = get_session_chat_history(session_store)
     entry = {
@@ -173,9 +301,11 @@ def update_session_chat_history(session_store, user_message, bot_response, meta=
     }
     if history and history[-1] == entry:
         session_store[SESSION_CHAT_HISTORY_KEY] = history[-SESSION_MAX_HISTORY:]
+        update_conversation_state(session_store, meta=meta)
         session_store.modified = True
         return
     session_store[SESSION_CHAT_HISTORY_KEY] = (history + [entry])[-SESSION_MAX_HISTORY:]
+    update_conversation_state(session_store, meta=meta)
     session_store.modified = True
 
 
@@ -220,7 +350,7 @@ def _is_casual_ai_candidate(intent, text):
 
 
 def is_conversational_query(intent, topic, text, keyword_match=None):
-    lowered = (text or "").strip().lower()
+    lowered = _normalize(text)
     keyword_match = keyword_match or {}
     if intent in {"greeting", "casual_checkin", "gratitude", "goodbye"}:
         return True
@@ -232,8 +362,8 @@ def is_conversational_query(intent, topic, text, keyword_match=None):
 
 
 def is_non_medical_query(text):
-    lowered = (text or "").strip().lower()
-    return any(marker in lowered for marker in NON_MEDICAL_QUERY_MARKERS) and not any(
+    lowered = _normalize(text)
+    return any(marker in lowered for marker in NON_MEDICAL_QUERY_MARKERS + TECHNICAL_QUERY_MARKERS) and not any(
         marker in lowered for marker in MEDICAL_QUERY_MARKERS
     )
 
@@ -347,10 +477,11 @@ def _response_style_hint(analysis):
 def generate_hybrid_response(user_message, analysis, session_store, rule_response=""):
     recent_messages = get_recent_user_messages(session_store, limit=3)
     LOGGER.info(
-        "[AI] Hybrid generation start: intent=%s topic=%s lang=%s",
+        "[AI] Hybrid generation start: intent=%s topic=%s lang=%s message_topic=%s",
         analysis.get("intent", "general_query"),
         analysis.get("topic", "general"),
         analysis.get("language", "en"),
+        analysis.get("message_topic", "unknown"),
     )
     ai_response = generate_openrouter_response(
         _contextual_user_message(user_message, recent_messages),
@@ -359,6 +490,7 @@ def generate_hybrid_response(user_message, analysis, session_store, rule_respons
             "intent": analysis.get("intent", "general_query"),
             "sentiment": analysis.get("sentiment", "neutral"),
             "topic": analysis.get("topic", "general"),
+            "message_topic": analysis.get("message_topic", "unknown"),
             "response_style": _response_style_hint(analysis),
         },
     )

@@ -57,19 +57,23 @@ from rule_responder import (
 from services.auth import consume_auth_attempt, get_or_create_csrf_token, reset_auth_attempts, validate_csrf
 from services.ai_handler import (
     ai_fallback_reason,
+    classify_message_topic,
     detect_casual_interruption,
     detect_emotional_continuation,
     detect_follow_up_query,
     detect_medication_follow_up,
     detect_resume_topic_request,
+    detect_topic_switch,
     generate_hybrid_response,
     get_active_conversation_context,
+    get_conversation_state,
     get_last_non_casual_context,
     get_paused_topic,
     is_conversational_query,
     push_paused_topic,
     repeated_intent_count,
     repeated_topic_count,
+    should_reset_context,
     should_use_ai_fallback,
     update_session_chat_history,
 )
@@ -1920,6 +1924,7 @@ def resolve_turn_analysis(user_message, lang, session_store):
     matched_keywords = priority_route.get("matched_keywords") or keyword_match.get("matched_keywords", [])
     extracted_entities = priority_route.get("entities") or {}
     previous_context = get_active_conversation_context(session_store)
+    conversation_state = get_conversation_state(session_store)
     resumable_context = get_last_non_casual_context(session_store)
     paused_context = get_paused_topic(session_store)
     previous_intent = previous_context.get("intent") if previous_context else None
@@ -1927,9 +1932,21 @@ def resolve_turn_analysis(user_message, lang, session_store):
     medication_follow_up = detect_medication_follow_up(user_message)
     emotional_continuation = detect_emotional_continuation(user_message)
     casual_interruption = detect_casual_interruption(user_message)
+    explicit_topic_switch = detect_topic_switch(user_message)
+    message_topic = classify_message_topic(user_message)
     resume_requested = detect_resume_topic_request(user_message)
     context_applied = False
     context_reason = ""
+    topic_switch_detected, topic_switch_reason = should_reset_context(
+        message_topic,
+        previous_context=previous_context,
+        current_category=detected_category,
+        follow_up_detected=follow_up_detected,
+        resume_requested=resume_requested,
+    )
+
+    if detected_category == "physical_symptom" and medication_follow_up:
+        resolved_intent = "solution_request"
 
     if casual_interruption:
         if resumable_context and resumable_context.get("category") in {"physical_symptom", "mental_emotional", "positive_emotion"}:
@@ -1957,13 +1974,17 @@ def resolve_turn_analysis(user_message, lang, session_store):
             "entity_reasoning": entity_reasoning,
             "previous_context": previous_context,
             "previous_intent": previous_intent,
+            "conversation_state": conversation_state,
             "follow_up_detected": False,
             "medication_follow_up": False,
             "emotional_continuation": False,
             "casual_interruption": True,
+            "message_topic": message_topic,
+            "topic_switch_detected": True,
             "resume_requested": False,
             "context_applied": False,
             "context_reason": "casual_interruption",
+            "topic_switch_reason": "casual_interruption",
         }
 
     if resume_requested and paused_context:
@@ -1984,6 +2005,17 @@ def resolve_turn_analysis(user_message, lang, session_store):
         topic = paused_context.get("topic", topic)
         route_subtopic = paused_context.get("subtopic") or route_subtopic
         extracted_entities = _merge_entity_maps(paused_context.get("entities", {}), extracted_entities)
+
+    if topic_switch_detected and not resume_requested:
+        if resumable_context and resumable_context.get("category") in {"physical_symptom", "mental_emotional", "positive_emotion"}:
+            push_paused_topic(session_store, resumable_context)
+        previous_context = {}
+        previous_intent = None
+        if detected_category == "ai_fallback" and message_topic in {"casual_greeting", "gratitude", "goodbye", "joke_fun"}:
+            detected_category = "casual_conversation"
+            resolved_intent = "casual_checkin" if message_topic != "gratitude" else "gratitude"
+            topic = "general"
+            route_subtopic = "joke" if message_topic == "joke_fun" else "casual_checkin"
 
     if previous_context:
         previous_category = previous_context.get("category", "ai_fallback")
@@ -2022,7 +2054,7 @@ def resolve_turn_analysis(user_message, lang, session_store):
             extracted_entities = _merge_entity_maps(previous_context.get("entities", {}), extracted_entities)
             context_applied = True
             context_reason = "emotional_continuation"
-        elif previous_category in {"physical_symptom", "mental_emotional"} and detected_category == "ai_fallback":
+        elif previous_category in {"physical_symptom", "mental_emotional"} and detected_category == "ai_fallback" and not topic_switch_detected:
             resolved_intent = previous_context.get("intent", resolved_intent)
             detected_category = previous_category
             topic = previous_topic if previous_topic and previous_topic != "general" else topic
@@ -2050,13 +2082,17 @@ def resolve_turn_analysis(user_message, lang, session_store):
         "entity_reasoning": entity_reasoning,
         "previous_context": previous_context,
         "previous_intent": previous_intent,
+        "conversation_state": conversation_state,
         "follow_up_detected": follow_up_detected,
         "medication_follow_up": medication_follow_up,
         "emotional_continuation": emotional_continuation,
         "casual_interruption": casual_interruption,
+        "message_topic": message_topic,
+        "topic_switch_detected": topic_switch_detected or explicit_topic_switch,
         "resume_requested": resume_requested,
         "context_applied": context_applied,
         "context_reason": context_reason,
+        "topic_switch_reason": topic_switch_reason,
     }
 
 
@@ -2091,6 +2127,7 @@ def build_response_with_optional_llm(intent, sentiment, topic, lang, text="", ke
                 "intent": resolved_intent,
                 "sentiment": sentiment,
                 "topic": topic,
+                "message_topic": classify_message_topic(text),
             },
             session,
             rule_response=rule_response,
@@ -2106,6 +2143,7 @@ def build_response_with_optional_llm(intent, sentiment, topic, lang, text="", ke
                 "intent": resolved_intent,
                 "sentiment": sentiment,
                 "topic": topic,
+                "message_topic": classify_message_topic(text),
             },
             session,
             rule_response=rule_response,
@@ -2544,7 +2582,7 @@ def chat():
             fallback_used = False
 
         logging.info(
-            "routing_decision category=%s intent=%s previous_intent=%s topic=%s subtopic=%s context_topic=%s follow_up_detected=%s casual_interruption=%s resume_requested=%s context_applied=%s context_reason=%s intent_confidence=%.4f sentiment_confidence=%.4f matched_keywords=%s entities=%s reasoning=%s override_reason=%s dataset_match=%s ai_reason=%s fallback=%s fallback_reason=%s",
+            "routing_decision category=%s intent=%s previous_intent=%s topic=%s subtopic=%s context_topic=%s follow_up_detected=%s casual_interruption=%s resume_requested=%s message_topic=%s topic_switch_detected=%s context_applied=%s context_reason=%s intent_confidence=%.4f sentiment_confidence=%.4f matched_keywords=%s entities=%s reasoning=%s override_reason=%s dataset_match=%s ai_reason=%s fallback=%s fallback_reason=%s",
             detected_category,
             resolved_intent,
             analysis["previous_intent"] or "none",
@@ -2554,6 +2592,8 @@ def chat():
             analysis["follow_up_detected"],
             analysis["casual_interruption"],
             analysis["resume_requested"],
+            analysis["message_topic"],
+            analysis["topic_switch_detected"],
             analysis["context_applied"],
             analysis["context_reason"] or "none",
             intent_confidence,
@@ -2616,6 +2656,9 @@ def chat():
             "ai_reason": ai_reason or None,
             "follow_up_detected": analysis["follow_up_detected"],
             "casual_interruption": analysis["casual_interruption"],
+            "message_topic": analysis["message_topic"],
+            "topic_switch_detected": analysis["topic_switch_detected"],
+            "topic_switch_reason": analysis["topic_switch_reason"] or None,
             "resume_requested": analysis["resume_requested"],
             "context_applied": analysis["context_applied"],
             "context_reason": analysis["context_reason"] or None,
