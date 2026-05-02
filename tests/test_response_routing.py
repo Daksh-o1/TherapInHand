@@ -49,6 +49,14 @@ def run_turn(session, message):
 
 
 class ResponseRoutingTests(unittest.TestCase):
+    def test_vague_symptom_gets_clarifying_question(self):
+        session = FakeSession()
+        analysis, response = run_turn(session, "I feel sick")
+        lowered = response.lower()
+        self.assertEqual(analysis["detected_category"], "physical_symptom")
+        self.assertTrue("what symptoms" in lowered or "do you have fever" in lowered or "since when" in lowered)
+        self.assertNotIn("i did not get enough signal", lowered)
+
     def test_mental_health_routes_and_language(self):
         for message in ["I have depression", "I feel lonely", "I feel emotionally exhausted"]:
             route, response = build_reply(message)
@@ -129,6 +137,31 @@ class ResponseRoutingTests(unittest.TestCase):
         self.assertEqual(analysis["resolved_intent"], "solution_request")
         self.assertNotIn("i'm here with you", lowered)
         self.assertTrue("paracetamol" in lowered or "ibuprofen" in lowered or "rest" in lowered or "fluids" in lowered)
+        self.assertLessEqual(len([p for p in response.split(".") if p.strip()]), 4)
+
+    def test_what_medicine_helps_fever_stays_medical(self):
+        session = FakeSession()
+        analysis, response = run_turn(session, "what medicine helps fever?")
+        lowered = response.lower()
+        self.assertEqual(analysis["detected_category"], "physical_symptom")
+        self.assertIn(analysis["resolved_intent"], {"symptom_report", "solution_request"})
+        self.assertNotIn("keep it light", lowered)
+        self.assertNotIn("talk about something real", lowered)
+        self.assertTrue("paracetamol" in lowered or "acetaminophen" in lowered or "medicine" in lowered or "fever" in lowered)
+
+    def test_should_i_consult_doctor_answers_directly(self):
+        session = FakeSession()
+        _, _ = run_turn(session, "I have fever")
+        analysis, response = run_turn(session, "Should I consult a doctor?")
+        lowered = response.lower()
+        self.assertEqual(analysis["resolved_intent"], "symptom_report")
+        self.assertTrue(lowered.startswith("yes") or lowered.startswith("usually") or lowered.startswith("it depends"))
+        self.assertLessEqual(len([p for p in response.split(".") if p.strip()]), 3)
+
+    def test_concise_casual_reply(self):
+        session = FakeSession()
+        _, response = run_turn(session, "hi")
+        self.assertLessEqual(len([p for p in response.split(".") if p.strip()]), 2)
 
     def test_casual_interruption_switches_out_of_dehydration(self):
         session = FakeSession()
@@ -201,6 +234,12 @@ class ResponseRoutingTests(unittest.TestCase):
         self.assertEqual(analysis["detected_category"], "casual_conversation")
         self.assertTrue("joke" in lowered or "funny" in lowered or "laugh" in lowered or "bottle" in lowered)
         self.assertNotIn("i'm here with you", lowered)
+
+    def test_short_answer_enforcement_for_simple_medical_question(self):
+        session = FakeSession()
+        _, _ = run_turn(session, "I have cold")
+        _, response = run_turn(session, "cold medicine?")
+        self.assertLessEqual(len([p for p in response.split(".") if p.strip()]), 4)
 
 
 if __name__ == "__main__":

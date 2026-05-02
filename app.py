@@ -1033,6 +1033,7 @@ def detect_physical_conditions(text, lang):
             "dizziness": ["chakkar", "sar ghoom", "chakkar aa raha", "dizzy"],
             "fatigue": ["kamzori", "kamjori", "thaka", "thaki", "weak", "weakness", "thak gya"],
             "dehydration": ["dehydration", "paani ki kami", "dry mouth", "kam paani"],
+            "sickness": ["sick", "unwell", "not feeling well", "ill"],
         }
     else:
         condition_keywords = {
@@ -1050,6 +1051,7 @@ def detect_physical_conditions(text, lang):
             "dizziness": ["dizzy", "dizziness", "lightheaded", "faint"],
             "fatigue": ["fatigue", "weak", "weakness", "drained", "no energy"],
             "dehydration": ["dehydration", "dehydrated", "dry mouth", "low fluids", "not drinking enough"],
+            "sickness": ["sick", "feeling sick", "not feeling well", "unwell", "ill"],
         }
 
     matches = []

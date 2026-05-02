@@ -189,9 +189,9 @@ MENTAL_SUBTOPIC_MAP = {
 FRIENDLY_FALLBACKS = {
     "en": {
         "default": [
-            "I want to help, but I need a little more detail to answer well.",
-            "I can keep going with this. Give me one more detail and I will be more specific.",
-            "I did not get enough signal from that alone, but we can still sort it out together.",
+            "Tell me a little more and I can answer more clearly.",
+            "Give me one more detail and I will make this more specific.",
+            "I can help with this. I just need a bit more to go on.",
         ],
         "casual": [
             "We can keep it light. Want a joke, a fun fact, or just normal chat?",
@@ -199,9 +199,9 @@ FRIENDLY_FALLBACKS = {
             "We can go with something lighter here. Pick a topic and I will roll with it.",
         ],
         "medical": [
-            "I can give general self-care guidance if you tell me the main symptom, how long it has been going on, and whether anything else came with it.",
-            "If this is physical, tell me the symptom clearly and I can give practical next steps plus warning signs.",
-            "I can help with basic symptom guidance. Tell me what hurts or what is bothering you most.",
+            "What symptoms are bothering you most right now?",
+            "Do you have fever, cough, body pain, nausea, weakness, or something else?",
+            "Since when have you been feeling sick or unwell?",
         ],
         "emotional": [
             "If this is feeling emotional, tell me whether it is more sadness, anxiety, stress, or overwhelm and I will meet you there.",
@@ -279,12 +279,12 @@ SPECIAL_FOLLOW_UP_OVERRIDES = {
 }
 GENERIC_PHYSICAL_RESPONSE_DATA = {
     "en": {
-        "validation": "That sounds uncomfortable.",
-        "causes": "Physical symptoms like this can come from something mild like irritation, infection, dehydration, poor sleep, or something else that needs a closer look.",
-        "care": "For now, rest if you can, keep up fluids, avoid anything that makes it worse, and keep an eye on whether the symptom is easing or getting stronger.",
-        "medication": "Only use over-the-counter medicine if it fits the symptom and you can take it safely as directed on the label.",
-        "warning": "Please get medical care sooner if it becomes severe, keeps getting worse, or comes with red flags like breathing trouble, chest pain, fainting, confusion, repeated vomiting, or dehydration.",
-        "follow_up": "If you want, tell me where it hurts, how long it has been going on, and whether anything else came with it.",
+        "validation": "Tell me the main symptom first.",
+        "causes": "If you are feeling sick, the next useful detail is whether it is more fever, cough, pain, nausea, weakness, or stomach trouble.",
+        "care": "For now, rest, sip fluids, and do not push yourself if the symptom is getting worse.",
+        "medication": "Once I know the symptom, I can suggest common OTC options when appropriate.",
+        "warning": "Get medical help sooner if you have trouble breathing, chest pain, confusion, fainting, or signs of dehydration.",
+        "follow_up": "What symptoms are bothering you most, and since when?",
     },
     "hinglish": {
         "validation": "Ye uncomfortable lag raha hai.",
@@ -352,9 +352,9 @@ STYLE_TRANSITIONS = {
 CASUAL_PATTERN_BANK = {
     "joke": {
         "en": [
-            "Why did the computer go to therapy? It had too many tabs open.",
+            "Quick joke: why did the computer go to therapy? It had too many tabs open.",
             "Tiny joke break: my water bottle and I are in a serious relationship. I keep going back to it.",
-            "Okay, one soft joke: I told my stress to take a day off. It said it was already working remotely.",
+            "Funny one: I told my stress to take a day off. It said it was already working remotely.",
         ],
         "hinglish": [
             "Chhota sa joke: mera stress bhi full-time job karta hai, bas salary mujhe nahi milti.",
@@ -403,6 +403,42 @@ CASUAL_PATTERN_BANK = {
         ],
     },
 }
+DETAIL_REQUEST_MARKERS = [
+    "explain more", "more detail", "in detail", "detailed", "elaborate",
+    "what does that mean", "why", "how exactly", "tell me more",
+]
+VAGUE_SYMPTOM_MARKERS = [
+    "i feel sick", "feeling sick", "not feeling well", "unwell", "i feel unwell",
+    "i feel weak", "feeling weak", "bad headache", "feel ill", "sick",
+]
+QUESTION_PREFIXES = ("should", "can", "could", "would", "is", "are", "do", "does", "did", "will")
+DOCTOR_QUESTION_MARKERS = [
+    "consult a doctor", "see a doctor", "go to a doctor", "need a doctor", "doctor?",
+]
+ROBOTIC_PHRASES = {
+    "i'm here with you": "",
+    "that sounds uncomfortable": "",
+    "physical symptoms like this": "this kind of symptom",
+    "something that needs a closer look": "something worth checking",
+    "i did not get enough signal from that alone": "tell me a bit more",
+}
+MEDICAL_CLARIFICATION_QUESTIONS = {
+    "general": [
+        "What symptoms are bothering you most?",
+        "Do you have fever, cough, body pain, nausea, or something else?",
+        "Since when have you been feeling like this?",
+    ],
+    "headache": [
+        "Is the headache mild or severe?",
+        "Did it start today, or has it been going on for a while?",
+        "Any fever, vomiting, dizziness, or light sensitivity with it?",
+    ],
+    "fatigue": [
+        "Is it more weakness, sleepiness, or low energy?",
+        "Did this start suddenly or build up over a few days?",
+        "Any fever, dizziness, poor appetite, or dehydration too?",
+    ],
+}
 
 
 def _normalize_text(text):
@@ -433,6 +469,14 @@ def _contains_keyword(text, keyword):
 
 def _compact_text(text, limit=MEMORY_TEXT_LIMIT):
     return " ".join(str(text or "").split())[:limit].strip()
+
+
+def _sentence_parts(text):
+    if not text:
+        return []
+    normalized = text.replace("\r", "\n")
+    chunks = re.split(r"\n\s*\n|(?<=[.!?])\s+", normalized)
+    return [chunk.strip() for chunk in chunks if chunk and chunk.strip()]
 
 
 def _resolve_language(session_store):
@@ -568,9 +612,12 @@ def _casual_query_kind(text):
 
 def _build_casual_response(intent, topic, lang, sentiment="neutral", session_store=None, user_text=""):
     support_lang = _support_language(lang, user_text=user_text) or "en"
+    normalized = _normalize_text(user_text)
     casual_kind = _casual_query_kind(user_text)
     if intent in {"greeting", "casual_checkin", "gratitude", "goodbye"}:
         casual_kind = casual_kind or "general_chat"
+    if detect_health_subtopic(user_text, lang) or _is_medication_query(user_text):
+        return None
     if not casual_kind and not (intent == "general_query" and topic == "general"):
         return None
     memory = _response_memory(session_store)
@@ -780,6 +827,96 @@ def _entity_context_line(entities, lang):
     return ""
 
 
+def _question_type(user_text, intent, category):
+    lowered = _normalize_text(user_text)
+    if any(marker in lowered for marker in DOCTOR_QUESTION_MARKERS):
+        return "doctor_consult"
+    if any(marker in lowered for marker in ["medicine", "medication", "tablet", "pill", "otc", "what helps", "what should i take", "what can i take"]):
+        return "medication"
+    if lowered.endswith("?") and lowered.startswith(QUESTION_PREFIXES):
+        return "yes_no"
+    if any(marker in lowered for marker in DETAIL_REQUEST_MARKERS):
+        return "detail_request"
+    if category == "physical_symptom" and any(marker in lowered for marker in VAGUE_SYMPTOM_MARKERS):
+        return "vague_symptom"
+    return "standard"
+
+
+def _response_length_mode(user_text, intent, category, follow_up=False):
+    lowered = _normalize_text(user_text)
+    if any(marker in lowered for marker in DETAIL_REQUEST_MARKERS):
+        return "DETAILED"
+    if follow_up or any(marker in lowered for marker in ["what about", "also", "medicine", "doctor"]):
+        return "MEDIUM"
+    if lowered.endswith("?") or intent in {"greeting", "gratitude", "goodbye", "casual_checkin"}:
+        return "SHORT"
+    if category in {"casual_conversation", "positive_emotion"}:
+        return "SHORT"
+    return "MEDIUM"
+
+
+def _vague_symptom_clarifier(user_text):
+    lowered = _normalize_text(user_text)
+    key = "general"
+    if "headache" in lowered:
+        key = "headache"
+    elif any(marker in lowered for marker in ["weak", "weakness", "fatigue", "tired"]):
+        key = "fatigue"
+    questions = MEDICAL_CLARIFICATION_QUESTIONS.get(key, MEDICAL_CLARIFICATION_QUESTIONS["general"])
+    return " ".join(questions[:2])
+
+
+def _doctor_consult_reply(condition=None):
+    label = (condition or "").replace("_", " ")
+    mapping = {
+        "fever": "Yes, if the fever is high, getting worse, or lasting more than a couple of days, it is a good idea to see a doctor.",
+        "headache": "Yes, if the headache is unusually strong, keeps coming back, or comes with warning signs, get it checked.",
+        "cold": "Usually not right away, but see a doctor if it is getting worse, not improving, or affecting breathing.",
+        "cough": "See a doctor if the cough is worsening, lasting too long, or making breathing harder.",
+        "stomach pain": "See a doctor if the pain is strong, persistent, or comes with vomiting, dehydration, or blood.",
+        "stomach issue": "See a doctor if the pain is strong, persistent, or comes with vomiting, dehydration, or blood.",
+    }
+    return mapping.get(label, "It depends on how strong it is and how long it has been going on, but yes, worsening or persistent symptoms are worth checking with a doctor.")
+
+
+def _normalize_response_style(response_text, response_meta=None, user_text="", question_type="standard", length_mode="MEDIUM"):
+    response_meta = response_meta or {}
+    cleaned = " ".join((response_text or "").replace("\r", "\n").split())
+    for old, new in ROBOTIC_PHRASES.items():
+        cleaned = re.sub(re.escape(old), new, cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\s+([?.!,])", r"\1", cleaned)
+    parts = _sentence_parts(cleaned)
+    if question_type == "vague_symptom":
+        parts = [part for part in parts if "doctor" not in part.lower() and "otc" not in part.lower()]
+    if question_type == "doctor_consult":
+        direct = _doctor_consult_reply(response_meta.get("subtopic"))
+        parts = [direct] + [part for part in parts if part.lower() != direct.lower()]
+    if question_type == "medication":
+        medication_line = _generic_medication_follow_up(response_meta.get("subtopic"), "en")
+        parts = [medication_line] + [part for part in parts if part.lower() != medication_line.lower()]
+    if question_type == "yes_no" and parts:
+        first = parts[0].strip()
+        if not re.match(r"^(yes|no|usually|sometimes|it depends)\b", first, re.IGNORECASE):
+            parts[0] = f"Yes, {first[0].lower() + first[1:]}" if first else "Yes."
+    max_sentences = {"SHORT": 2, "MEDIUM": 3, "DETAILED": 5}.get(length_mode, 3)
+    trimmed = parts[:max_sentences]
+    final = "\n\n".join(part for part in trimmed if part).strip()
+    verbosity_reduced = len(parts) > len(trimmed)
+    LOGGER.info(
+        "[StyleNormalizer] question_type=%s length_mode=%s direct_answer_first=%s verbosity_reduced=%s source=%s",
+        question_type,
+        length_mode,
+        question_type in {"yes_no", "doctor_consult", "medication"},
+        verbosity_reduced,
+        response_meta.get("kind", "unknown"),
+    )
+    response_meta["length_mode"] = length_mode
+    response_meta["question_type"] = question_type
+    response_meta["direct_answer_first"] = question_type in {"yes_no", "doctor_consult", "medication"}
+    response_meta["verbosity_reduced"] = verbosity_reduced
+    return final, response_meta
+
+
 def _append_unique(base_text, extra_text):
     if not extra_text:
         return base_text
@@ -822,7 +959,15 @@ def _classify_response_route(intent, topic, lang, user_text=""):
     positive_subtopic = _detect_positive_subtopic(normalized, support_lang)
     mental_subtopic = _detect_mental_subtopic(normalized, support_lang)
     casual_kind = _casual_query_kind(user_text)
-    physical_signal = topic == "physical_discomfort" or intent in {"symptom_report", "solution_request"}
+    detected_health_subtopic = detect_health_subtopic(user_text, lang)
+    has_medical_markers = _is_medication_query(user_text) or bool(detected_health_subtopic)
+    physical_signal = (
+        topic == "physical_discomfort"
+        or intent in {"symptom_report", "solution_request"}
+        or bool(detected_health_subtopic)
+        or has_medical_markers
+        or any(marker in normalized for marker in VAGUE_SYMPTOM_MARKERS)
+    )
 
     if intent == "emergency" or _has_emergency_signal(normalized, support_lang):
         return {"category": "crisis", "subtopic": "crisis", "confidence": 1.0, "dataset_match": "none", "fallback_reason": ""}
@@ -831,7 +976,12 @@ def _classify_response_route(intent, topic, lang, user_text=""):
     if mental_subtopic or intent == "emotional_support" or topic in {"anxiety", "stress", "fatigue"}:
         return {"category": "mental_emotional", "subtopic": mental_subtopic or topic or "general", "confidence": 0.96 if mental_subtopic else 0.82, "dataset_match": "mental_health_keywords" if mental_subtopic else "intent_or_topic", "fallback_reason": ""}
     if physical_signal:
-        return {"category": "physical_symptom", "subtopic": topic or "physical_discomfort", "confidence": 0.9, "dataset_match": "physical_signal", "fallback_reason": ""}
+        subtopic = (
+            (detected_health_subtopic or {}).get("name")
+            or (topic if topic != "general" else "")
+            or "physical_discomfort"
+        )
+        return {"category": "physical_symptom", "subtopic": subtopic, "confidence": 0.9, "dataset_match": "physical_signal", "fallback_reason": ""}
     if casual_kind or intent in {"greeting", "casual_checkin", "gratitude", "goodbye"}:
         return {"category": "casual_conversation", "subtopic": casual_kind or intent, "confidence": 0.9, "dataset_match": "casual_pattern", "fallback_reason": ""}
     return {"category": "ai_fallback", "subtopic": "general", "confidence": 0.4, "dataset_match": "none", "fallback_reason": "no_specific_route_match"}
@@ -946,8 +1096,23 @@ def _context_follow_up_parts(condition_data, follow_up_kind, session_store=None,
     return parts
 
 
+def _generic_medication_follow_up(subtopic, support_lang):
+    label = (subtopic or "").replace("_", " ")
+    if support_lang == "hinglish":
+        return f"Agar ye {label} ke liye hai, to common OTC options label ke hisaab se hi lo, aur agar koi condition ya allergy ho to pharmacist ya doctor se confirm kar lo."
+    if label in {"physical discomfort", "general", ""}:
+        return "A common OTC medicine such as paracetamol may help, but it should match the symptom and the label directions."
+    if label == "headache":
+        return "For a mild headache, paracetamol may help if you can take it safely and use the label directions."
+    if label == "fever":
+        return "For fever, paracetamol is a common OTC option if you can take it safely and follow the label."
+    if label == "cold":
+        return "For a simple cold, people usually use symptom-based OTC relief like paracetamol for aches or fever rather than one cure-all medicine."
+    return f"For {label or 'this symptom'}, a common OTC medicine may help, but it should match the symptom and the label directions."
+
+
 def _build_context_follow_up_response(intent, topic, lang, session_store=None, user_text=""):
-    if not _is_follow_up_query(user_text):
+    if not (_is_follow_up_query(user_text) or _is_medication_query(user_text)):
         return None
     context = _active_chat_context(session_store)
     if not context:
@@ -975,6 +1140,11 @@ def _build_context_follow_up_response(intent, topic, lang, session_store=None, u
                     previous_response=previous_bot,
                     previous_bot=previous_bot,
                 )
+            if follow_up_kind == "medication" and not any(
+                any(marker in part.lower() for marker in ["paracetamol", "ibuprofen", "medicine", "medication", "otc"])
+                for part in parts
+            ):
+                parts.append(_generic_medication_follow_up(subtopic, support_lang))
             if parts:
                 return {
                     "style": "context_follow_up",
@@ -1044,15 +1214,18 @@ def _support_length_mode(intent, sentiment, session_store, topic, user_text, sev
         if topic and isinstance(item, dict) and item.get("topic") == topic
     )
     word_count = len((user_text or "").split())
+    lowered = _normalize_text(user_text)
     if emergency:
         return "short"
+    if any(marker in lowered for marker in DETAIL_REQUEST_MARKERS):
+        return "long"
     if severe or sentiment == "very_negative":
-        return random.choice(["short", "medium"])
-    if intent == "solution_request" or word_count >= 14:
-        return random.choice(["medium", "long"])
-    if repeated_topic < 2 and word_count >= 6:
-        return random.choice(["medium", "long"])
-    return random.choice(["short", "medium"])
+        return "medium"
+    if intent == "solution_request":
+        return "short" if word_count <= 7 else "medium"
+    if repeated_topic >= 1 or word_count >= 10:
+        return "medium"
+    return "short"
 
 
 def _assemble_support_parts(mode, blocks, blueprint, include_medication=False, include_warning=False, include_follow_up=False):
@@ -1484,6 +1657,9 @@ def _response_phrase_fingerprints(response):
 
 def _build_response(intent, topic, lang, repeated=False, previous_response="", sentiment="neutral", session_store=None, user_text=""):
     route = _classify_response_route(intent, topic, lang, user_text=user_text)
+    question_type = _question_type(user_text, intent, route.get("category"))
+    follow_up_active = _is_follow_up_query(user_text)
+    length_mode = _response_length_mode(user_text, intent, route.get("category"), follow_up=follow_up_active)
     LOGGER.info(
         "[RuleResponder] route_decision category=%s subtopic=%s confidence=%.2f dataset_match=%s fallback_reason=%s intent=%s topic=%s",
         route.get("category"),
@@ -1494,6 +1670,28 @@ def _build_response(intent, topic, lang, repeated=False, previous_response="", s
         intent,
         topic,
     )
+    LOGGER.info(
+        "[RuleResponder] response_heuristics question_type=%s length_mode=%s follow_up_active=%s topic_continuity=%s",
+        question_type,
+        length_mode,
+        follow_up_active,
+        bool(_active_chat_context(session_store)),
+    )
+
+    if route.get("category") == "physical_symptom" and question_type == "vague_symptom":
+        response_text = _vague_symptom_clarifier(user_text)
+        return response_text, "", {
+            "style": "medical_clarifier",
+            "blueprint": "clarify_symptom",
+            "mode": "short",
+            "structure": ["clarifier"],
+            "kind": "clarifier",
+            "category": route.get("category"),
+            "subtopic": route.get("subtopic"),
+            "route_confidence": route.get("confidence"),
+            "dataset_match": route.get("dataset_match"),
+            "fallback_reason": route.get("fallback_reason"),
+        }
 
     context_follow_up = _build_context_follow_up_response(
         intent=intent,
@@ -1826,6 +2024,20 @@ def generate_response(intent, topic, sentiment, session, text=""):
             user_text=text,
         )
         attempts += 1
+
+    normalized_response, response_meta = _normalize_response_style(
+        response,
+        response_meta=response_meta,
+        user_text=text,
+        question_type=_question_type(text, intent, response_meta.get("category")),
+        length_mode=_response_length_mode(
+            text,
+            intent,
+            response_meta.get("category"),
+            follow_up=_is_follow_up_query(text),
+        ),
+    )
+    response = normalized_response
 
     recent_prefixes = memory.get("recent_prefixes", []) or []
     if not isinstance(recent_prefixes, list):
